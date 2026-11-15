@@ -8,12 +8,15 @@ import { h } from './dom.ts'
 import { firstName, personSign } from './rules.ts'
 import { idleWithWork } from './people.ts'
 import { pin, ringed, type PinState } from './system/people.ts'
-import { toLocal } from './scale.ts'
+import { toLocal, toScreen } from './scale.ts'
 
 interface Model { id: number; name: string; ring: string; state: PinState; label: string; rank: number; tired?: boolean }
 
 // How close two people stand, in screen pixels, before they share a pin.
 const NEAR = 40
+// A figure taller than this on the screen (the interface's own pixels, feet to the pin's point) carries their name
+// in place of the face pin.
+const NEAR_TALL = 44
 
 export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[]; stopped: () => Set<number>; board?: () => number; stamps?: () => DOMRect[] }): { update(c: S.Campaign): void; frame(): void; escape(): boolean; dispose(): void } {
   const app = ctx.app
@@ -63,10 +66,10 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
     }
   }
 
-  function draw(w: HTMLElement, m: Model, count: number, members: Model[]): void {
+  function draw(w: HTMLElement, m: Model, count: number, members: Model[], near = false): void {
     const picked = app.unit === m.id
-    patch(w, JSON.stringify([m, count, picked, many, ctx.touch(), count > 1 ? members.map(x => [x.id, x.label]) : 0]), () => pin(m.name, m.state, {
-      ring: m.ring, name: picked, testid: `pin-${m.id}`, count,
+    patch(w, JSON.stringify([m, count, picked, many, ctx.touch(), near, count > 1 ? members.map(x => [x.id, x.label]) : 0]), () => pin(m.name, m.state, {
+      ring: m.ring, name: picked || near, testid: `pin-${m.id}`, count,
       label: count > 1 ? `${count} people are here. ${members.map(x => x.label).join('. ')}. Press to choose one.` : `${m.label}. Press to ${picked ? 'close' : 'open'} ${m.name === 'You' ? 'your' : 'their'} card.`,
       pressed: count === 1 ? picked : undefined,
       // the pointer over a pin names them, as it does over their body
@@ -139,9 +142,17 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
         if (p) w.style.transform = `translate3d(${toLocal(p.x).toFixed(1)}px, ${toLocal(p.y).toFixed(1)}px, 0)`
         continue
       }
-      draw(w, m, s0.members.length, s0.members)
+      // Seen from near, a person is their own figure (the owner, 14 November: "the icons stay over the character at
+      // too close of a range and block their models"): once they stand taller on the screen than the pin itself,
+      // the face gives way to their name alone, and at every range the pin stands clear above the head.
+      const foot = ctx.view.unitFoot(m.id)
+      const tall = s0.members.length === 1 && Number.isFinite(foot.y) ? Math.max(0, foot.y - s0.y) : 0
+      const near = tall > toScreen(NEAR_TALL)
+      const lift = Math.min(tall * 0.12, toScreen(26))
+      draw(w, m, s0.members.length, s0.members, near)
+      w.classList.toggle('near', near)
       w.classList.toggle('tired', !!m.tired)
-      w.style.transform = `translate3d(${toLocal(s0.x).toFixed(1)}px, ${toLocal(s0.y).toFixed(1)}px, 0)`
+      w.style.transform = `translate3d(${toLocal(s0.x).toFixed(1)}px, ${toLocal(s0.y - lift).toFixed(1)}px, 0)`
       w.style.zIndex = String(10 - m.rank)
       if (open === m.id) {
         list.style.transform = `translate3d(${(toLocal(s0.x) + 26).toFixed(1)}px, ${(toLocal(s0.y) - 60).toFixed(1)}px, 0)`

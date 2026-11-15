@@ -14,7 +14,7 @@ import {
   haulByDark, haulRate, placeName, startSeason, stepDay, tractorsRunning, unitBlock, workDay, workday,
 } from './season.ts'
 import { CHOICE_LABEL } from './incidents.ts'
-import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, startBuilding, travel, YARD_NAME } from './buildings.ts'
+import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, spendBlock, startBuilding, travel, YARD_NAME } from './buildings.ts'
 import { brushedNow, COVER_WORD, fell, isField, standing } from './land.ts'
 import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Incident, JobKind, Lot, Result, RoutineKind, Season, SprayWay, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
@@ -690,14 +690,15 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       return ok()
     }
     case 'buy': {
-      if (c.phase !== 'plan') return fail('You can only buy equipment in spring.')
+      if (c.phase !== 'plan' && c.phase !== 'season' && c.phase !== 'cellar') return fail('You can buy equipment in spring, during the season, or in winter.')
       const u = P.UPGRADES[cmd.upgrade]
       if (!u) return fail('No such equipment.')
       if (c.upgrades[cmd.upgrade]) return fail('You already own it.')
       if ((cmd.upgrade === 'tractor2' || cmd.upgrade === 'tractor3') && !hasBuilt(c, 'shed')) return fail('You need the machine shed before you can keep another tractor.')
       if (cmd.upgrade === 'tractor3' && !c.upgrades.tractor2) return fail('Buy the second tractor first.')
       if (cmd.upgrade === 'house2' && buildingAt(c, 'house', HOME_YARD)) return fail('You already have a second potato house at home, built or going up.')
-      if (c.cash - u.cost < 0) return fail('You can\'t afford it yet, and the bank won\'t lend for equipment.')
+      const short = spendBlock(c, u.cost, 'equipment')
+      if (short) return fail(short)
       c.cash -= u.cost
       c.yearCosts += u.cost
       c.yearEquip = (c.yearEquip ?? 0) + u.cost
@@ -708,8 +709,9 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
         bought.building = c.nextBuilding
         c.buildings.push({ id: c.nextBuilding++, kind: 'house', yard: HOME_YARD, done: P.BUILDINGS.house.days, need: P.BUILDINGS.house.days, built: true })
       }
-      springOf(c).bought.push(bought)
-      return ok([note(c, 'bought', 'info', `You bought the ${u.name.toLowerCase()} for $${withCommas(u.cost)}. You can undo this until the season starts.`)])
+      // (a spring's purchase can be taken back until the season starts; one made later is made)
+      if (c.phase === 'plan') springOf(c).bought.push(bought)
+      return ok([note(c, 'bought', 'info', `You bought the ${u.name.toLowerCase()} for $${withCommas(u.cost)}.${c.phase === 'plan' ? ' You can undo this until the season starts.' : ''}`)])
     }
     case 'unbuy': {
       const k = c.phase === 'plan' ? c.spring?.bought.findIndex(b => b.upgrade === cmd.upgrade) ?? -1 : -1
@@ -1279,7 +1281,7 @@ export function stumpBlock(c: Campaign, field: number): string {
   if (standing(fp.cover)) return `${name} is still ${COVER_WORD[fp.cover]}. Fell it first.`
   if (fp.cover !== 'stumps') return `There are no stumps on ${name}.`
   if (fp.works) return 'The contractor is already there.'
-  if (c.cash - P.STUMP_FEE < 0) return `You can't afford the contractor yet. It costs $${withCommas(P.STUMP_FEE)}.`
+  if (spendBlock(c, P.STUMP_FEE, 'contractors')) return `You can't afford the contractor yet. It costs $${withCommas(P.STUMP_FEE)}.`
   return ''
 }
 
@@ -1297,7 +1299,7 @@ export function tileBlock(c: Campaign, field: number): string {
   if (fp.works) return 'The contractor is already there.'
   const st = c.season?.fields[field].status
   if (c.phase === 'season' && (st === 'planted' || st === 'growing' || st === 'dead' || st === 'digging')) return 'Tile can only be laid when no crop is in the ground.'
-  if (c.cash - P.TILE_FEE < 0) return `You can't afford the contractor yet. It costs $${withCommas(P.TILE_FEE)}.`
+  if (spendBlock(c, P.TILE_FEE, 'contractors')) return `You can't afford the contractor yet. It costs $${withCommas(P.TILE_FEE)}.`
   return ''
 }
 

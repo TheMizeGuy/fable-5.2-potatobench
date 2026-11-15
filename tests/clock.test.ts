@@ -76,13 +76,13 @@ describe('the clock', () => {
       expect(DAY_SECONDS).toBeLessThanOrEqual(60)
       expect(DAY_SECONDS).toBeGreaterThanOrEqual(40)
       expect(1 / DAYS_PER_SECOND[1]).toBeCloseTo(DAY_SECONDS)
-      // The speeds are a strategy game's: each named for what it is against the first, a step apart.
-      expect(SPEED_X.slice(1)).toEqual(['1×', '2×', '3×'])
-      for (const k of [1, 2, 3]) expect(DAYS_PER_SECOND[k] / DAYS_PER_SECOND[1]).toBeCloseTo(k)
+      // The speeds are a strategy game's (RimWorld's: one, three and six times), each named for what it is.
+      expect(SPEED_X.slice(1)).toEqual(['1×', '3×', '6×'])
+      for (const [k, x] of [[1, 1], [2, 3], [3, 6]]) expect(DAYS_PER_SECOND[k] / DAYS_PER_SECOND[1]).toBeCloseTo(x)
       // At every one of them a day is long enough to be watched as it is worked.
       for (const k of [1, 2, 3]) expect(1 / DAYS_PER_SECOND[k]).toBeGreaterThanOrEqual(LONG_DAY_S)
-      // Days with no work in them go by in seconds at every speed.
-      expect(QUIET_S).toEqual([0, 6, 3, 2])
+      // Days with no work in them go by in two seconds only while the player skips ahead.
+      expect(QUIET_S).toEqual([0, 2, 2, 2])
       const app = new App(loadWorld())
       app.newGame(undefined, 11)
       app.do({ t: 'begin' })
@@ -97,7 +97,9 @@ describe('the clock', () => {
 
   // The owner, 14 November, of a farm that opened on a plan and then on days of waiting: "ZERO intuitive direction on
   // what im supposed to do next". A new farm opens on its first decision.
-  it('a new farm\'s first season opens on the morning of the word to plant and stops for it at once, and a day nobody works goes by in six seconds at 1×', () => {
+  // "the time randomly changes" (the owner, 14 November, of days with no work in them going by in seconds by
+  // themselves): every day is the same length at a speed, and only the player's own Skip ahead runs the empty ones by.
+  it('a new farm\'s first season opens on the morning of the word to plant and stops for it at once; a day nobody works is as long as any other, and Skip ahead runs it by in two seconds', () => {
     setDays('long')
     try {
       const app = new App(loadWorld())
@@ -115,15 +117,20 @@ describe('the clock', () => {
       expect(app.speed).toBe(0)
       expect(app.pauseCause).toBe('plantAsk')
       expect(s.day).toBe(s.plantAsk)
-      // Left unanswered, the crew starts on its own some days on: those days have no work in them, and go by in six
-      // seconds each.
+      // Left unanswered, nobody works: the day is a minute long all the same, and nothing hurries it.
       app.setSpeed(1)
       const day = s.day
       let ms = 0
-      for (; ms < 90_000 && !s.jobs.some(j => j.kind === 'plant'); ms += 50) { app.tick(50); if (app.speed === 0) app.setSpeed(1) }
-      const days = s.day - day
+      for (; ms < 200_000 && s.day === day; ms += 50) { app.tick(50); expect(app.hurrying).toBe(false) }
+      expect(ms / 1000, 'seconds to a day with no work, at 1×').toBeGreaterThan(55)
+      expect(ms / 1000).toBeLessThan(65)
+      // The player's own Skip ahead runs such days by in two seconds each, to the crew's own start.
+      app.skipAhead()
+      const from = s.day
+      for (ms = 0; ms < 60_000 && !s.jobs.some(j => j.kind === 'plant'); ms += 50) { app.tick(50); if (app.speed === 0) break }
+      const days = s.day - from
       expect(days).toBeGreaterThan(0)
-      expect(ms / 1000 / days, 'seconds to a day with no work').toBeLessThan(7.5)
+      expect(ms / 1000 / days, 'seconds to a day with no work, skipping ahead').toBeLessThan(3)
     } finally { setDays('brisk') }
   })
 

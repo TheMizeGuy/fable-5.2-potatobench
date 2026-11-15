@@ -1158,6 +1158,24 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (!f) return { x: 0, y: 0, visible: false }
     const vp = sight()
     if (anchorFoot.w !== vp.w || anchorFoot.h !== vp.h || anchorFoot.mode !== snap.mode || (!anchorFoot.bottom && vp.bottom)) anchorFoot = { w: vp.w, h: vp.h, mode: snap.mode, bottom: vp.bottom }
+    // The middle of what shows of the field (the owner, 14 November, of tags hung at their fields' near edges: "huge
+    // ass uncentered labels all over the farm"): its ground is sampled, each point weighed by how well inside the
+    // free part of the window it lies, so the point moves smoothly as the field comes into the window or leaves it.
+    {
+      const N = 7, R = 70
+      const lo = vp.top + 6, hi = vp.h - anchorFoot.bottom - 10
+      const ramp = (v: number, a0: number, a1: number) => Math.max(0, Math.min(1, Math.min(v - a0, a1 - v) / R))
+      let sw = 0, sx = 0, sy = 0
+      for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) {
+        const wx = f.x0 + (f.x1 - f.x0) * (a + 0.5) / N, wz = f.z0 + (f.z1 - f.z0) * (b + 0.5) / N
+        anchor.set(wx, fieldBaseY(wz) + 0.7, wz).project(rig.camera)
+        if (anchor.z >= 1) continue
+        const px = (anchor.x + 1) / 2 * vp.w, py = (1 - anchor.y) / 2 * vp.h
+        const w = ramp(px, 8, vp.w - 8) * ramp(py, lo, hi)
+        sw += w; sx += w * px; sy += w * py
+      }
+      if (sw > 1.5) return { x: sx / sw, y: sy / sw, visible: true }
+    }
     const cam = rig.camera.position
     const near = fields.nearEdge(i, cam.x, cam.z)
     far.set(2 * f.cx - near.x, near.y, 2 * f.cz - near.z)

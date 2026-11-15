@@ -55,6 +55,19 @@ export function buildCost(c: Campaign, kind: BuildingKind): BuildCost {
   }
 }
 
+// What the farm can put into things that last: in spring its cash (the plan's own costs are still to come out of the
+// loan); from the season's start, its cash and the bank's money until it owes BUILD_CREDIT in all.
+export function spendable(c: Campaign): number {
+  return c.phase === 'plan' ? Math.max(0, c.cash) : Math.max(0, c.cash + P.BUILD_CREDIT)
+}
+
+// Why the farm cannot pay this much for such a thing now, or '' when it can. what: 'buildings', 'equipment'.
+export function spendBlock(c: Campaign, cost: number, what: string): string {
+  if (cost <= spendable(c) + 1e-6) return ''
+  if (c.phase === 'plan') return `You can't afford it yet. It costs $${withCommas(cost)}, and in spring the bank won't lend for ${what}.`
+  return `You can't afford it yet. It costs $${withCommas(cost)}, and the bank lends until you owe $${withCommas(P.BUILD_CREDIT)} (you ${c.cash < 0 ? `owe $${withCommas(Math.round(-c.cash))}` : `have $${withCommas(Math.floor(c.cash))}`}).`
+}
+
 // Why this building cannot be started at this yard now, or '' when it can.
 export function buildBlock(c: Campaign, kind: BuildingKind, yard: number, dufourHeld: boolean): string {
   const spec = P.BUILDINGS[kind]
@@ -69,8 +82,7 @@ export function buildBlock(c: Campaign, kind: BuildingKind, yard: number, dufour
   const at = buildingAt(c, kind, yard)
   if (at) return at.built ? `There's already ${article(spec.name)} ${spec.name.toLowerCase()} in ${YARD_NAME[yard]}.` : `${article(spec.name, true)} ${spec.name.toLowerCase()} is already going up in ${YARD_NAME[yard]}.`
   const cost = buildCost(c, kind)
-  if (c.cash - cost.total < 0) return `You can't afford it yet. It costs $${withCommas(cost.total)} with the materials your yard is short of, and the bank won't lend for buildings.`
-  return ''
+  return spendBlock(c, cost.total, 'buildings')
 }
 
 // Pays for a building, takes its materials from the yard, and starts it.

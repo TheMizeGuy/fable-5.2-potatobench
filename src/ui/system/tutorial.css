@@ -90,13 +90,8 @@
 /* The agent's one line inside a card of the game's own (a first telegram, a first weigh ticket). */
 .guide-line { margin: 0; padding: 6px 10px; font: 400 15px/1.3 var(--f-text); background: var(--paper-2, #f4ecd4); border-left: 3px solid var(--ink); }
 
-/* The screen grows with the player: a piece a guided first year has not brought in yet keeps its place, unseen. */
-.hud.st-hide-tags .plate-layer .tag-wrap, .hud.st-hide-tags .plate-layer .sel-layer { visibility: hidden; }
-.hud.st-hide-stamps .plate-layer .need { visibility: hidden; }
-.hud.st-hide-people .plate-layer .pin-at, .hud.st-hide-people .plate-layer .pin-list-at, .hud.st-hide-people .crew .timebook { visibility: hidden; }
-.hud.st-hide-list .crew .queue, .hud.st-hide-list .plate-layer .listed { visibility: hidden; }
-.hud.st-hide-forecast .topbar .forecast { visibility: hidden; }
-.hud.st-hide-after .topbar .after { visibility: hidden; }
+/* (Until 14 November a guided first year hid the pieces it had not brought in yet, each keeping its place: a board
+   with a blank where its figure was. The owner, of that: "huge blank box". Every piece is on the screen from the start.) */
 /* A tip stands beside the game and takes nothing from it: the goal slip goes on saying what is next (a tip may
    point at its key), and the line that says why the game is paused stays. Only the toasts at the foot wait while a
    tip is up, so two things are never said at once there; a telegram that needs its answer still stands alone. */
@@ -105,10 +100,5 @@
 /* Off the season screen (the spring's walk through the plan sheet) the goal slip still stands down whole while the
    agent has a note: there both would be naming the next thing to press. */
 .hud.agent:not(:has(.season-screen)) .topbar :is(.goal, .goal-go) { visibility: hidden; }
-/* And the boards say less: figures for today and tomorrow, an order on a tag as its mark alone, no line for what
-   the money just did. */
-.hud.guided .topbar .forecast .d:nth-child(n+4) :is(.hi, .pct) { display: none; }
-.hud.guided .plate-layer .listed .stamp { display: none; }
-.hud.guided .topbar .cash-moved { display: none; }
 /* The first telegram carries the agent's own line that the game is paused: the board's tag would say it twice. */
 .hud:has(.telegram .guide-line) .topbar .stopped-tag { display: none; }

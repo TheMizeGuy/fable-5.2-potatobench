@@ -2,7 +2,7 @@
 // the money stands, the year's story, what goals cost, what keeping the fields sprayed would take, and the one rule
 // for planting.
 import { dayIndex, formatDay, isLeap, SUNDAY, weekday, withCommas } from './calendar.ts'
-import { buildBlock, buildCost } from './buildings.ts'
+import { buildBlock, buildCost, spendBlock } from './buildings.ts'
 import { apply, held, mortgageDue, openLots, planCosts, sprayWayNow, stumpBlock, tileBlock } from './campaign.ts'
 import { HOME_YARD, PARCELS, TRACTS } from './farm.ts'
 import { basePrice, gradePrice, harvestPrice, lotValue } from './market.ts'
@@ -818,7 +818,7 @@ export interface GoalCost { id: string; label: string; cost: number; can: boolea
 // What each thing a goal can ask for costs now, and whether the farm can pay for it now ('' why when it can).
 export function goalCosts(c: Campaign): GoalCost[] {
   const out: GoalCost[] = []
-  const cash = (cost: number) => c.cash - cost >= 0 ? '' : `It costs $${withCommas(cost)}, and you have $${withCommas(Math.max(0, c.cash))} on hand.`
+  const cash = (cost: number) => spendBlock(c, cost, 'equipment')
   const tract = TRACTS.find(i => c.fields[i].tenure !== 'none' && c.fields[i].cover === 'stumps') ?? -1
   out.push({ id: 'stump', label: 'Pull the stumps', cost: P.STUMP_FEE, can: tract >= 0 && !stumpBlock(c, tract), why: tract < 0 ? 'You have no felled tract with stumps to pull.' : stumpBlock(c, tract) })
   const bottom = c.fields.findIndex((f, i) => f.tenure === 'owned' && f.cover === 'open' && f.elev === 0 && !f.tiled && i >= 0)
@@ -830,7 +830,7 @@ export function goalCosts(c: Campaign): GoalCost[] {
   }
   for (const id of Object.keys(P.UPGRADES) as UpgradeId[]) {
     const u = P.UPGRADES[id]
-    const why = c.upgrades[id] ? 'You already own it.' : c.phase !== 'plan' ? 'You can only buy equipment in spring.' : cash(u.cost)
+    const why = c.upgrades[id] ? 'You already own it.' : c.phase !== 'plan' && c.phase !== 'season' && c.phase !== 'cellar' ? 'You can buy equipment in spring, during the season, or in winter.' : cash(u.cost)
     out.push({ id: `buy:${id}`, label: u.name, cost: u.cost, can: !why, why })
   }
   const roomWhy = hiredCount(c) >= housingLimit(c) ? 'Every place to live is taken, and a bunkhouse adds six more.' : c.phase !== 'plan' && c.phase !== 'season' ? 'You can hire in spring or during the season.' : ''

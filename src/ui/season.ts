@@ -1,6 +1,7 @@
 // The season (design/season.html): the land, with a stencilled tag on each field and a face pin on each person; the
 // two boards at the top; the time book of people at the foot with the alerts beside it; and, for whatever is
 // selected, its card beside the point clicked and tied to it (tie.ts), with the selection drawn on the land itself.
+import { openBuild } from './buildmenu.ts'
 import type { Goal } from '../game/goals.ts'
 import { SPEED_X } from '../game/app.ts'
 import { nextGoal } from '../game/goals.ts'
@@ -81,7 +82,7 @@ const LIST_ROOM = 52
 
 export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () => void; onAlmanac: () => void }): Screen {
   const app = ctx.app
-  const top = topBar(ctx, { ...o, show: g => show(target(g)), canShow: g => !!target(g) })
+  const top = topBar(ctx, { ...o, onBuild: () => openBuild(ctx), show: g => show(target(g)), canShow: g => !!target(g) })
   const crew = h('div', { class: 'crew sys' })
   const clockSlot = h('div', { class: 'clock-slot dock sys' })
   const notesSlot = h('div', { class: 'notes-slot sys' })
@@ -372,7 +373,17 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const r = document.querySelector(`#ui .plate-layer [data-testid="badge-${i}"]`)?.getBoundingClientRect()
       return a.visible && a.x >= 0 && a.y >= 0 && a.x <= innerWidth && a.y <= innerHeight && !!r && r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
     })
-    setTimeout(() => { if (app.screen === 'season' && app.speed === 0 && !onScreen()) app.focus(-1) }, 400)
+    // (judged once the camera has come to rest: a season that opens on the question finds it still on its way in)
+    let was = ctx.view.fieldAnchor(0), tries = 0
+    const judge = (): void => {
+      if (app.screen !== 'season' || app.speed !== 0) return
+      const now = ctx.view.fieldAnchor(0)
+      const still = Math.hypot(now.x - was.x, now.y - was.y) < 0.5
+      was = now
+      if (!still && ++tries < 24) { setTimeout(judge, 160); return }
+      if (!onScreen()) app.focus(-1)
+    }
+    setTimeout(judge, 400)
   }
   const off = app.on(ev => {
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
@@ -600,10 +611,10 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     // (The slip's strip is kept off for the width of the board it hangs from, whatever the slip says and whether or
     // not a key stands beside it: an order given from a card can change the slip, and must not move the card.)
     const hung = top.el.querySelector<HTMLElement>('.almanac > .mount')?.getBoundingClientRect()
-    for (const x of top.el.querySelectorAll<HTMLElement>('.goal, .tb-pop')) {
+    for (const x of top.el.querySelectorAll<HTMLElement>('.goal, .idle-row, .tb-pop')) {
       if (x.offsetParent === null || !x.offsetHeight) continue
       const r = x.getBoundingClientRect()
-      const wide = hung && hung.width > 0 && x.classList.contains('goal')
+      const wide = hung && hung.width > 0 && (x.classList.contains('goal') || x.classList.contains('idle-row'))
       blocks.push({ left: wide ? Math.min(r.left, hung.left) : r.left, top: r.top, right: wide ? Math.max(r.right, hung.right) : r.right, bottom: r.bottom })
     }
     // At a desk the two boards are things to keep off as well: between them, and beside the shorter one, the land

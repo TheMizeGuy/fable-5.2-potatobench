@@ -51,7 +51,7 @@ const SPRING = 1 / 0.052, FAR_MOVE = 130
 // How long a tag that goes is still carried with its field while it fades (season.css: .tag-wrap.gone).
 const FADE_OUT_MS = 180
 // The room kept beside every tag for "on the list" and a stamp, so neither coming crowds the next tag.
-const LIST_W = 96, STAMP_W = 52
+const LIST_W = 80, STAMP_W = 44
 
 // How far the face of a tag over a field in view may stand from the field's outline on the screen, in pixels; and
 // the steps tried round where it would stand for a place clear of the other tags, over three rows down and up.
@@ -153,9 +153,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     const wrap = h('div', { class: 'tag-wrap gone', hidden: true })
     wraps.push(wrap)
     models.push(null)
-    size.push({ w: 150, h: 34, extra: 0 })
-    full.push({ w: 150, h: 34, extra: 0 })
-    brief.push({ w: 150, h: 34, extra: 0 })
+    size.push({ w: 120, h: 26, extra: 0 })
+    full.push({ w: 120, h: 26, extra: 0 })
+    brief.push({ w: 120, h: 26, extra: 0 })
     face.push({ t: 0, h: 34, eye: 15 })
     listed.push(false)
     at.push({ x: -1, y: -1, place: 'gone' })
@@ -303,8 +303,11 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       // No land left between the boards (a phone with a pop open over it): the tags wait until there is, all but the
       // field in hand's.
       if (y1 < y0 && !app.selection.includes(i)) { want.push({ x: a.x, y: a.y, place: 'gone' }); continue }
-      const x = Math.max(x0, Math.min(Math.max(x0, x1), a.x)), y = Math.max(y0, Math.min(Math.max(y0, y1), a.y))
-      want.push({ x, y, place: !seen || Math.abs(x - a.x) > 1 || Math.abs(y - a.y) > 1 ? 'docked' : 'on' })
+      // (the field's point is the middle of what shows of it; the tag's own middle goes there, so y, its foot, is
+      // half its height below)
+      const ay = a.y + hh / 2
+      const x = Math.max(x0, Math.min(Math.max(x0, x1), a.x)), y = Math.max(y0, Math.min(Math.max(y0, y1), ay))
+      want.push({ x, y, place: !seen || Math.abs(x - a.x) > 1 || Math.abs(y - ay) > 1 ? 'docked' : 'on' })
     }
     return want
   }

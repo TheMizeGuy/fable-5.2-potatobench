@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { fitScale } from '../src/ui/scale.ts'
 
 describe('the interface\'s scale for a window', () => {
-  it('is 100% on a laptop and grows by quarters on a larger monitor', () => {
+  // (Until 14 November it grew from 1600 by 900: a quarter larger at 1920 by 1080 and half as large again at 2560 by
+  // 1440, where the owner called its labels huge.)
+  it('is 100% up to a 1920 by 1080 window and grows by quarters on a larger monitor', () => {
     expect(fitScale(1280, 720)).toBe(1)
     expect(fitScale(1440, 900)).toBe(1)
     expect(fitScale(1512, 982)).toBe(1)
     expect(fitScale(1728, 1117)).toBe(1)
-    expect(fitScale(1920, 1080)).toBe(1.25)
-    expect(fitScale(2560, 1440)).toBe(1.5)
+    expect(fitScale(1920, 1080)).toBe(1)
+    expect(fitScale(2560, 1440)).toBe(1.25)
+    expect(fitScale(2507, 1308)).toBe(1.25)
     expect(fitScale(3840, 2160)).toBe(2)
   })
 

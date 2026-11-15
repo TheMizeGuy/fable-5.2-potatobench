@@ -10,11 +10,13 @@ import { clearSave, parseSave, readSave, readSettings, serialize, writeSave, wri
 export type Speed = 0 | 1 | 2 | 3
 // Pause and three speeds, set from the work and not from the calendar (the owner, 14 November: "make it play like a
 // true fun RTS watching all your guys ... make the speed go around the gameplay this is a game not a backend
-// simulator"): at the first a day of work is a minute, so one order on one field is watched from start to finish in
-// well under a minute (a field planted in a minute, hilled in half, sprayed in a quarter); the second and third are
-// twice and three times that, as a strategy game's speeds are, and the work is watched at every one of them.
-// Time with no work in it goes by quickly at every speed (QUIET_S: a day nobody works, and what is left of a day
-// once its last work is done): the clock keeps to what the people are doing, and the crop is not waited for.
+// simulator"): at the first a day is a minute, so one order on one field is watched from start to finish in well
+// under a minute (a field planted in a minute, hilled in half, sprayed in a quarter); the second and third are
+// three and six times that, as RimWorld's are (docs/RTS.md), and the work is watched at every one of them.
+// Every day is the same length at a speed, whoever is or is not working: the clock changes only when the player
+// changes it. (Until 14 November days with no work in them went by in seconds by themselves; the owner, of a farm
+// whose people stood idle: "the time randomly changes".) The one fast run is the player's own: "Skip ahead", which
+// goes through days with no work in them at QUIET_S seconds each until the next decision.
 export const DAY_SECONDS = 60
 // A day this long or longer at the clock's speed (seconds) is watched as it is worked, and counted as it goes.
 export const LONG_DAY_S = 10
@@ -22,16 +24,10 @@ export const DAY_HOURS = DAY_STRETCHES
 // ('brisk' is the clock the game had before days were long: four seconds a day at its first speed, every day the
 // same length. Tests of everything that is not the long day itself run on it, so a test that waits for a day waits
 // four seconds.)
-const LADDERS = { long: [0, 1 / DAY_SECONDS, 2 / DAY_SECONDS, 3 / DAY_SECONDS], brisk: [0, 0.25, 0.75, 2] }
-// Seconds a day with no work in it takes at each speed (null: such a day is as long as any other).
-const QUIETS: Record<keyof typeof LADDERS, number[] | null> = { long: [0, 6, 3, 2], brisk: null }
+const LADDERS = { long: [0, 1 / DAY_SECONDS, 3 / DAY_SECONDS, 6 / DAY_SECONDS], brisk: [0, 0.25, 0.75, 2] }
+// Seconds a day with no work in it takes while the player skips ahead (null: the test clock, where every day is short).
+const QUIETS: Record<keyof typeof LADDERS, number[] | null> = { long: [0, 2, 2, 2], brisk: null }
 export let QUIET_S: number[] | null = QUIETS.long
-// Seconds a day takes while its only work is on the land (felling, picking rocks, cutting brush; a day with none
-// on the crop, and what is left of a day once the crop's work is done): work for people who would otherwise have
-// none, which is weeks of days in a summer. It is seen being done, eight seconds to a day, and the season stays a
-// sitting (at a minute a day a summer of felling is two hours).
-const LAND_S = [0, 8, 5, 3]
-const LAND_WORK: JobKind[] = ['fell', 'rocks', 'brush']
 // A new farm's field hands, and a season of a hand's wages (seven months at the hall's rate).
 export const START_HANDS = 2
 const START_HAND_PAY = 2660
@@ -721,7 +717,7 @@ export class App {
   }
 
   private sinceCount = 0
-  // Whether the time now going by has no work in it: nobody works today, or today's last work is done.
+  // Whether the player's skip ahead is running through time with no work in it.
   hurrying = false
   private quietNow(c: Campaign): boolean {
     if (!QUIET_S || !c.season?.clock) return false
@@ -731,16 +727,6 @@ export class App {
     for (const x of log) if (x.to > last) last = x.to
     // (someone on the way to work that begins later today is before the last of it; the evening after it, a moment's grace)
     return this.dayProgress > last + 0.012
-  }
-
-  // Whether what is left of today's work is all work on the land (the day's last work on the crop is done, or it
-  // had none).
-  private landNow(): boolean {
-    const log = this.today()?.season?.clock?.log
-    if (!log || !log.length) return false
-    let crop = -1
-    for (const x of log) if (!LAND_WORK.includes(x.kind) && x.to > crop) crop = x.to
-    return this.dayProgress > crop + 0.012
   }
 
   // How long a day of work takes at the speed the clock is at (or, paused, would go on at), in seconds.
@@ -813,16 +799,15 @@ export class App {
       if (this.owed && this.pauseOwed(c)) return
       // The morning: the day's standing orders are given as the day begins, not when it is over.
       if (!c.season.clock) { this.do({ t: 'work', to: 0 }); if (this.speed === 0 || !c.season || seasonDone(c)) return }
-      // (time with no work in it goes by quickly: a day nobody works, and the rest of a day once its work is done)
-      const quiet = this.quietNow(c)
-      const land = !quiet && !!QUIET_S && this.landNow()
-      this.hurrying = quiet || land
-      this.dayProgress += (Math.min(dtMs, 250) / 1000) * (quiet ? 1 / QUIET_S![this.speed] : land ? 1 / LAND_S[this.speed] : DAYS_PER_SECOND[this.speed] * this.pace)
+      // (only while the player skips ahead does time with no work in it go by quickly)
+      const quiet = this.skipBack > 0 && this.quietNow(c)
+      this.hurrying = quiet
+      this.dayProgress += (Math.min(dtMs, 250) / 1000) * (quiet ? 1 / QUIET_S![this.speed] : DAYS_PER_SECOND[this.speed] * this.pace)
       // A watched day is counted as it goes: by the hour (and no oftener than every three seconds of play) the farm's
       // own count has the work done so far, so the work list, a person's card and what the day brings (a field
       // planted, barrels to haul, a test dig's tray) keep up with what is seen. Always to the hour: the crews' work is
       // counted an hour at a time, and a count part way through one would not be the day that was worked out ahead.
-      if (this.daySeconds() >= LONG_DAY_S && this.dayProgress < 1 && !quiet && !land) {
+      if (this.daySeconds() >= LONG_DAY_S && this.dayProgress < 1 && !quiet) {
         this.sinceCount += Math.min(dtMs, 250)
         if (this.sinceCount >= 3000 && Math.floor(this.dayProgress * DAY_HOURS) / DAY_HOURS > (c.season.clock?.at ?? 0) + 1e-6) {
           this.sinceCount = 0

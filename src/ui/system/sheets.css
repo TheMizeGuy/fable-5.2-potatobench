@@ -8,7 +8,6 @@
 /* What moved the money, under the balance for a moment. */
 .topbar .balance .cash-moved, .topbar .balance .after-why { flex-basis: 100%; text-align: right; font: italic 400 13px/1.25 var(--f-text); color: var(--ink-2); animation: sh-fade var(--t-slip) var(--ease-out); }
 /* Why the year-end figure moved, under it for a week of the season; its hover is the sum that makes it, a line a part. */
-.hud.st-hide-after .topbar .after-why { visibility: hidden; }
 /* The board's lines keep fixed rows, one line each, said or not: the keys under the board never move. */
 .topbar .balance .cash-moved { height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar .balance .after-why { display: flex; justify-content: flex-end; align-items: center; gap: 6px; height: 28px; white-space: nowrap; overflow: hidden; }

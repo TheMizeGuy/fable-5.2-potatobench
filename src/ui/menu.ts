@@ -1,4 +1,6 @@
 // The menu: carry on, the help, the settings, the save, and the ways out.
+import { openBuild } from './buildmenu.ts'
+import { openContracts } from './contracts.ts'
 import type { Quality } from '../game/app.ts'
 import * as S from '../sim/index.ts'
 import { confirmPaper, type Ctx } from './core.ts'
@@ -114,6 +116,8 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
             h('button', { class: 'btn', type: 'button', testid: 'menu-fields', onclick: () => { close(); o.farm!.fields() } }, 'Fields'),
             h('button', { class: 'btn', type: 'button', testid: 'menu-people', onclick: () => { close(); o.farm!.people() } }, 'People')) : null,
           season ? h('button', { class: 'btn wide', type: 'button', testid: 'menu-almanac', onclick: () => { close(); o.onAlmanac() } }, icon('almanac', 'i'), 'The almanac') : null,
+          inGame && c && c.phase !== 'over' ? h('button', { class: 'btn wide', type: 'button', testid: 'menu-contracts', onclick: () => { close(); openContracts(ctx) } }, icon('contract', 'i'), 'Contracts') : null,
+          inGame && c && (c.phase === 'season' || c.phase === 'cellar') ? h('button', { class: 'btn wide', type: 'button', testid: 'menu-build', onclick: () => { close(); openBuild(ctx) } }, icon('hammer', 'i'), 'Build') : null,
           h('button', { class: 'btn wide', type: 'button', testid: 'save-export', disabled: !c, onclick: exportSave }, icon('save', 'i'), 'Save a copy'),
           h('button', { class: 'btn wide', type: 'button', testid: 'save-import', onclick: () => file.click() }, icon('ticket', 'i'), 'Load a saved farm'),
           h('button', { class: 'btn wide', type: 'button', testid: 'how-open', onclick: () => o.onHelp() }, icon('key', 'i'), 'How to play'),

@@ -363,6 +363,10 @@ export const NOTE_PAYMENT = 10000
 export const LIVING = 9000
 export const CREDIT_LIMIT = -20000            // carried past year end, the bank forecloses below this
 export const OPERATING_LIMIT = -75000         // the spring operating loan, repaid from the crop
+// Once the season is under way the bank lends for things that last as well (a building, a machine, a contractor's
+// work), while the farm owes no more than this in all. (Invented, for play: a farm that can buy nothing until its
+// first crop sells has nothing to build for a year.)
+export const BUILD_CREDIT = 30000
 export const CREDIT_RATE = 0.1
 export const FIELD_COST = 8000                 // fertilizer, fuel, repairs and insurance for a potato field
 export const SEED_CWT_PER_FIELD = 100

@@ -1,7 +1,7 @@
 // The top of the screen (design/season.html): two anchored boards. On the left the almanac board: the date leaf, six
 // days of forecast and the season ruled under them, with the canary goal slip hung below. On the right the bank
 // board: the balance, the clock's keys and the menu, and the contracts as ranges.
-import { freeWork, goals, nextGoal, seasonStep, waitingFor, type FreeWork, type Goal } from '../game/goals.ts'
+import { goals, idleWork, nextGoal, seasonStep, waitingFor, type FreeWork, type Goal } from '../game/goals.ts'
 import { SPEED_X } from '../game/app.ts'
 import * as S from '../sim/index.ts'
 import { contractRows } from './contracts.ts'
@@ -295,7 +295,7 @@ export interface TopBar {
 
 // show: takes the player to where the goal is reached (a field, the yard, the hiring), when the screen knows one.
 // The phone's season screen carries the clock and the menu at the thumb (season.ts): there the bank board leaves them out.
-export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void; show?: (g: Goal) => boolean; canShow?: (g: Goal) => boolean }): TopBar {
+export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void; onBuild?: () => void; show?: (g: Goal) => boolean; canShow?: (g: Goal) => boolean }): TopBar {
   const el = h('header', { class: 'topbar sys' })
   const app = ctx.app
   const contracts = contractRows(ctx)
@@ -440,13 +440,31 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     ctx.dirty()
   }
 
-  // Work for people with nothing to do, given from the slip: on the list, said, and its place shown.
+  // People with nothing to do (the owner, 14 November, of a slip that said "Everyone is idle" beside a key that said
+  // "Order it": "order it? order what?"): who they are, and each job they can be given as a key that names it. A
+  // key pressed puts the order on the list, says what it is for, and shows its place. Build opens the build menu.
   function giveFree(w: FreeWork): void {
     const r = app.order(w.kind, { fields: [w.field] })[0]
     if (r?.ok) ctx.say(`${JOB_DOING[w.kind]} ${S.FIELD_NAMES[w.field]} is on the work list. ${w.gain}`, 'good')
     else ctx.say(`${S.FIELD_NAMES[w.field]}: ${r?.err ?? 'that can\'t be ordered now.'}`, 'info')
+    app.setHover(-1)
     app.focus(w.field)
     ctx.dirty()
+  }
+  function idleRow(c: S.Campaign): HTMLElement | null {
+    const idle = c.phase === 'season' ? idleWork(c) : null
+    if (!idle) return null
+    const one = c.crew.find(u => u.id === idle.who[0])
+    const who = idle.who.length === c.crew.length && c.crew.length > 1 ? 'Everyone is idle.' : idle.who.length === 1 && one ? (one.kind === 'farmer' ? 'You are idle.' : `${firstName(one.name)} is idle.`) : `${idle.who.length} people are idle.`
+    return h('div', { class: 'idle-row', testid: 'idle', role: 'group', 'aria-label': 'People with nothing to do' },
+      h('p', { class: 'idle-say' }, icon('idle', 'i'), h('b', null, who), ' Give them work:'),
+      h('div', { class: 'idle-keys' },
+        idle.options.map((w, k) => h('button', {
+          class: 'btn idle-key', type: 'button', testid: `idle-do-${k}`, 'data-kind': w.kind, title: ctx.touch() ? undefined : `${w.gain} Work on the crop comes first: anyone needed there leaves this for it.`,
+          onclick: () => giveFree(w),
+          onpointerenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') app.setHover(w.field) }, onpointerleave: () => { if (app.hover === w.field) app.setHover(-1) },
+        }, icon(w.kind, 'i'), `${JOB_VERB[w.kind]}: ${S.FIELD_NAMES[w.field]}`)),
+        o.onBuild ? h('button', { class: 'btn idle-key', type: 'button', testid: 'idle-build', onclick: () => o.onBuild!() }, icon('hammer', 'i'), 'Build…') : null))
   }
 
   // Why a goal is not the fist's to point at now, in a few words.
@@ -512,24 +530,6 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     // The next step is the crew's own: what the player is waiting for, in their terms, never the crew's job, whether
     // or not a "Show me" could reach it. With something asked of the player now, that comes first.
     const mine = !call && season && g && wait <= 0 && CROP_STEPS.has(g.id) ? waitingFor(c, app.world) : null
-    // While the player waits on the crew and somebody has nothing to do, the slip is work to give them: said with
-    // the fist, and given with one press. (The owner, 14 November: "ZERO intuitive direction on what im supposed to
-    // do next"; a farm whose slip said "Nothing to do until..." beside three people standing still.)
-    const free = mine ? freeWork(c) : null
-    if (free) {
-      // (few words: the slip and its key stand side by side under the board, which is no wider for them)
-      const one = c.crew.find(u => u.id === free.who[0])
-      const who = free.who.length === c.crew.length && c.crew.length > 1 ? 'Everyone is idle' : free.who.length === 1 && one ? (one.kind === 'farmer' ? 'You are idle' : `${firstName(one.name)} is idle`) : `${free.who.length} people are idle`
-      const what = `${lowerFirst(JOB_VERB[free.kind])} ${free.kind === 'brush' ? 'at ' : free.kind === 'rocks' ? 'in ' : ''}${S.FIELD_NAMES[free.field]}`
-      const why = `${free.gain} Work on the crop comes first: anyone needed there leaves this for it.`
-      const slip = h('button', {
-        class: 'goal', type: 'button', testid: 'goal', k: `goal-free-${free.kind}-${free.field}`, 'data-free': free.kind, 'aria-expanded': String(pop === 'goals'),
-        title: ctx.touch() ? undefined : why,
-        onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
-      }, fist(), h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, 'Now: '), h('b', { class: 'goal-t' }, who), h('span', { class: 'sr' }, ': '), h('span', { class: 'goal-when' }, what)),
-      h('span', { class: 'sr' }, `. ${why} Press to open your goals.`))
-      return h('div', { class: 'goal-row' }, slip, h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', title: ctx.touch() ? undefined : why, onclick: () => giveFree(free) }, icon('check', 'i'), 'Order it'))
-    }
     // What comes after the pressing call: the next goal, unless that is work the crew does by itself.
     const crewOwn = (x: Goal) => { const act = GOAL_ROUTINE[x.id]; return !!act && S.routineInfo(c).some(r => r.kind === act && r.auto) }
     if (callFirst || mine || (season && g && !reach && wait <= 0)) {
@@ -575,7 +575,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const counted = season || c.phase === 'cellar'
     if (counted && (app.needs() !== viewFor || viewCash !== Math.round(c.cash))) {
       // The first time in a season the spring loan grows, a note says what it is.
-      if (loanNoteNow(c, viewCash, loanSaid)) { loanSaid = c.year; ctx.notes.push({ text: LOAN_NOTE, offer: true }) }
+      if (loanNoteNow(c, viewCash, loanSaid)) { loanSaid = c.year; ctx.notes.push({ text: LOAN_NOTE, offer: true, glyph: 'bank' }) }
       viewFor = app.needs(); viewCash = Math.round(c.cash)
       viewNow = outlook(ctx, c)
       // A move of the year-end figure since the last one said, however slowly it came, says its cause under it for a
@@ -613,7 +613,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x), x.block, x.now && !x.done && !!o.canShow?.(x)]) : 0, reach: g ? !!o.canShow?.(g) : false,
       call: season ? pressing(c)?.id ?? '' : '', block: g?.block ?? '', view: view?.why ?? '', moved: moved?.text ?? '', last: lastMoved, why: whyNow ? [whyNow.text, whyNow.ask, remedied(c)] : '', by: popBy,
       jobs: season ? [...new Set(c.season!.jobs.map(j => j.kind))].sort().join() : '', auto: season ? S.routineInfo(c).filter(r => r.auto).map(r => r.kind).join() : '',
-      k: season || c.phase === 'cellar' ? contracts.key() : 0, ph: season ? phaseNow(c) : '', mine: season ? waitingFor(c, app.world) : 0, free: season ? freeWork(c) : 0,
+      k: season || c.phase === 'cellar' ? contracts.key() : 0, ph: season ? phaseNow(c) : '', mine: season ? waitingFor(c, app.world) : 0, free: season ? idleWork(c) : 0,
     }
     el.dataset.phase = c.phase
     el.dataset.layout = layout
@@ -646,12 +646,14 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         // the board never move.
         after && lines && !moved ? h('span', { class: 'cash-moved idle', 'aria-hidden': 'true' }, '\u00a0') : null,
         after,
-        after && lines ? h('span', { class: `after-why${whyNow ? '' : ' idle'}`, testid: whyNow ? 'outlook-why' : undefined, role: whyNow ? 'status' : undefined, 'aria-hidden': whyNow ? undefined : 'true' },
+        // Under the figure, what moved it; and while nothing has, the goal it is read against (two fresh viewers of
+        // the board, 14 November: "the screen never says" what the goal is).
+        after && lines ? h('span', { class: `after-why${whyNow ? '' : ' goal-line'}`, testid: whyNow ? 'outlook-why' : 'outlook-goal', role: whyNow ? 'status' : undefined },
           whyNow ? [h('span', { class: 'why-t' }, whyNow.cause.text), Math.abs(whyNow.cause.amount) < 0.5 ? null : h('span', { class: 'why-amt num' }, `: ${signedMoney(whyNow.cause.amount)}`),
             whyNow.cause.remedy && !remedied(c) ? [' ', h('button', { class: 'why-key fix-key', type: 'button', testid: 'outlook-fix', onclick: () => (REMEDY[whyNow!.cause.remedy!] ? order(whyNow!.cause) : fix(whyNow!.cause)) },
               REMEDY[whyNow.cause.remedy] ? [REMEDY[whyNow.cause.remedy], ' ', h('span', { class: 'num' }, F.money(S.jobCost(c, whyNow.cause.remedy, whyNow.cause.field ?? -1)))] : 'Show me')] : null,
             whyNow.ask ? [' ', h('button', { class: 'why-key', type: 'button', testid: 'outlook-why-open', 'aria-label': 'Why?', title: ctx.touch() ? undefined : 'Why?', 'aria-expanded': String(pop === 'money'), onclick: () => openMoney('press') }, icon('help', 'i'))] : null]
-            : '\u00a0') : null)
+            : h('span', { class: 'why-t' }, `Goal: keep this above $0 · year ${Math.min(c.goalYears, c.history.length + 1)} of ${c.goalYears}`)) : null)
       // The sum that makes the figure, under the board, clear of the speed keys.
       const money = pop === 'money' && view ? h('div', {
         class: 'tb-pop money-pop sheet', id: 'money-pop', testid: 'money-pop', role: 'dialog', 'aria-label': 'How the year-end figure is made up',
@@ -684,6 +686,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
             season ? seasonTrack(c) : null,
             season ? phaseRow(c) : null),
           goalSlip(c, g, gone, season),
+          season ? idleRow(c) : null,
           pop === 'goals' ? ladder(c, g) : null,
           phone ? money : null),
         phone ? null : h('section', { class: 'bank', 'aria-label': 'Money, game speed and contracts' },

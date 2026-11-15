@@ -127,10 +127,16 @@ describe('the ladder of goals', () => {
     const c = farm()
     pastYear(c)
     S.apply(w, c, { t: 'begin' })
+    // (Since 14 November a machine can be bought in the season, on the bank's money: it is a step for now.)
     expect(goal(c, 'tool').done).toBe(false)
-    expect(goal(c, 'tool').now).toBe(false)
-    // With no step to take now (a hand is not needed on four fields), the line says what waits for spring.
+    expect(goal(c, 'tool').now).toBe(true)
     expect(nextGoal(c)?.id).toBe('tool')
+    // With the farm at the end of what the bank lends, the machine cannot be paid for: a contract waits for spring,
+    // and the line says so.
+    c.cash = -S.BUILD_CREDIT
+    c.upgrades.boom = true
+    expect(goal(c, 'contract').now).toBe(false)
+    expect(nextGoal(c)?.id).toBe('contract')
     // Fields away from home are more than one person's work: hiring can be done now, so it comes forward.
     c.fields[6].tenure = 'rented'
     expect(nextGoal(c)?.id).toBe('hire')
@@ -204,12 +210,13 @@ describe('the ladder of goals', () => {
     c.history[0].contracts = 1
     c.history[0].rent = 1
     c.fields[14].cover = 'stumps'
-    c.cash = 1000
+    // (in the season the bank lends until the farm owes BUILD_CREDIT: this farm is $1,000 short of that)
+    c.cash = 1000 - S.BUILD_CREDIT
     const stump = goal(c, 'stump')
     expect(stump.cost).toBe(S.STUMP_FEE)
     expect(stump.short).toBe(S.STUMP_FEE - 1000)
     expect(nextGoal(c)?.id).not.toBe('stump')
-    c.cash = S.STUMP_FEE + 1
+    c.cash = S.STUMP_FEE + 1 - S.BUILD_CREDIT
     expect(goal(c, 'stump').short).toBe(0)
     expect(nextGoal(c)?.id).toBe('stump')
   })
@@ -299,7 +306,8 @@ describe('what the player is waiting for', () => {
       expect(seasonStep(c)?.id === 'walk' || seasonStep(c)?.id === 'hill' || seasonStep(c)?.id === 'spray' || seasonStep(c)?.id === 'sample').toBe(true)
       day(c)
     }
-    expect([...said]).toEqual(['Nothing to do until blight weather / your crew tends the fields on its own'])
+    // (until 14 November: "Nothing to do until blight weather". A slip never says there is nothing to do.)
+    expect([...said]).toEqual(['The crop is growing / your crew tends it; your next decision is a spray, when blight weather comes'])
     // Spraying decided: the next decision is the vine kill, with its date.
     expect(S.apply(w, c, { t: 'sprayWay', way: 'auto' }).ok).toBe(true)
     const kill = waitingFor(c)!
@@ -310,7 +318,7 @@ describe('what the player is waiting for', () => {
     // The vines dead: nothing until the weigh ticket.
     for (let n = 0; n < 200 && c.season!.fields.some(f => f.status === 'growing' && f.deadDay < 0) && !S.seasonDone(c); n++) day(c)
     const end = waitingFor(c)
-    if (end) expect(end).toEqual({ title: 'Nothing to do until the weigh ticket', when: 'your crew digs and hauls on its own' })
+    if (end) expect(end).toEqual({ title: 'The harvest is coming in', when: 'your crew digs and hauls; then you sell or store it' })
   })
 
   it('says nothing in the place of a step the player took from the crew', () => {

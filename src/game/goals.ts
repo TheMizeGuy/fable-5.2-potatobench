@@ -1,6 +1,6 @@
 // The ladder: what a farm reaches for next, in the order a player can reach it. Worked out from the farm as it stands,
 // so nothing extra is saved.
-import { BUILDING_KINDS, forecast, FELL_DAYS, FIELD_COUNT, formatDay, goalCosts, isField, jobBlock, killOutlook, NOTE_PAYMENT, PARCELS, plantWordGiven, ROCKS_ADVISE, sprayWayNow, standingBy, TRACTS, type Campaign, type World, type GoalCost, type JobKind } from '../sim/index.ts'
+import { BUILDING_KINDS, forecast, FELL_DAYS, FIELD_COUNT, formatDay, goalCosts, isField, jobBlock, killOutlook, NOTE_PAYMENT, PARCELS, plantWordGiven, ROCKS_ADVISE, spendable, sprayWayNow, standingBy, TRACTS, type Campaign, type World, type GoalCost, type JobKind } from '../sim/index.ts'
 
 export interface Goal {
   id: string
@@ -36,7 +36,7 @@ function prices(c: Campaign): Record<string, Price> {
   // left with less than that at the start of a season goes into its year end short.
   const tool = cheapest(all.filter(g => g.id.startsWith('buy:')))
   const left = c.cash - tool.cost
-  const floor = !tool.block && tool.cost > 0 && left < NOTE_PAYMENT
+  const floor = c.phase === 'plan' && !tool.block && tool.cost > 0 && left < NOTE_PAYMENT
     ? `That would leave ${money(left)}, less than the ${money(NOTE_PAYMENT)} yearly bank payment.` : ''
   return {
     stump: one('stump'), hire: one('hire'), foreman: one('foreman'), land: one('rent'),
@@ -121,8 +121,8 @@ export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
 
   const ladder: Spec[] = [
     ...chain(season),
-    { id: 'tool', title: 'Buy a machine', why: 'Equipment speeds up the jobs that matter most.', when: 'In spring',
-      done: Object.values(c.upgrades).some(Boolean), now: spring, price: price.tool },
+    { id: 'tool', title: 'Buy a machine', why: 'Equipment speeds up the jobs that matter most.', when: 'In spring, during the season or in winter',
+      done: Object.values(c.upgrades).some(Boolean), now: spring || inSeason || c.phase === 'cellar', price: price.tool },
     ...(handNeeded || hired || c.history.some(y => y.wages > 0) ? [{ id: 'hire', title: 'Hire a hand', why: 'A second pair of hands helps you get through the work list.', when: 'In spring or during the season',
       done: hired || c.history.some(y => y.wages > 0), now: spring || inSeason, price: price.hire }] : []),
     { id: 'contract', title: 'Sign a contract', why: 'A buyer locks in a price, and you have to deliver the potatoes.', when: 'In spring',
@@ -150,7 +150,7 @@ export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
     const cost = g.done || !p ? 0 : p.cost
     const block = g.done || !p ? '' : p.block
     // Money is the reason when the farm has less in hand than the step costs.
-    const short = block && cost > Math.max(0, c.cash) ? Math.ceil(cost - Math.max(0, c.cash)) : 0
+    const short = block && cost > spendable(c) ? Math.ceil(cost - spendable(c)) : 0
     return { ...g, how: g.why, progress: g.done ? null : g.progress ?? null, long: !!g.long, cost, block, short }
   })
 }
@@ -214,7 +214,7 @@ export function waitingFor(c: Campaign, world?: World): { title: string; when: s
   // While the spraying is the player's (not left to the crew), a spray is their next decision until the vine kill
   // comes near: before the first one it comes with the first blight weather, after it with each new forecast of it.
   if (up.length && !crew('spray') && sprayWayNow(c) !== 'none' && !(due && due.day - s.day <= KILL_NEAR)) {
-    if (!s.fields.some(f => f.lastSpray >= 0)) return { title: 'Nothing to do until blight weather', when: 'your crew tends the fields on its own' }
+    if (!s.fields.some(f => f.lastSpray >= 0)) return { title: 'The crop is growing', when: 'your crew tends it; your next decision is a spray, when blight weather comes' }
     return { title: 'Your next decision is a spray', when: blightAhead(world, c) }
   }
   if (up.length && !crew('kill')) {
@@ -228,34 +228,38 @@ export function waitingFor(c: Campaign, world?: World): { title: string; when: s
     return { title: 'Your next decision is killing the vines', when: due ? `due around ${formatDay(c.year, due.day, true)}` : 'in September' }
   }
   if (!crew('dig') || !crew('haul')) return null
-  if (potato.some(i => !s.fields[i].weighed && s.fields[i].status !== 'lost')) return { title: 'Nothing to do until the weigh ticket', when: up.length ? 'your crew kills the vines and digs on its own' : 'your crew digs and hauls on its own' }
+  if (potato.some(i => !s.fields[i].weighed && s.fields[i].status !== 'lost')) return up.length ? { title: 'The crop is growing', when: 'your crew kills the vines and digs it; then you sell or store it' } : { title: 'The harvest is coming in', when: 'your crew digs and hauls; then you sell or store it' }
   return null
 }
 
-// Work on the land for people with nothing to do: the one job to give them next, or null when everyone has work,
-// when work on the land is already on the list, or when there is none to give. The crop's own work comes first
-// whatever is ordered here (someone on land work leaves it for pressing work on the crop). In order: the hedgerow
-// round a crop in the ground, lowest land first (it is this year's crop it spares); the stones of a field with no
-// crop in it, stoniest first; then a tract to fell, brush before woods.
+// Work on the land for people with nothing to do: the jobs to offer them, or null when everyone has work, when an
+// order on the list has nobody at it yet (those people are about to go to it), when work on the land is already on
+// the list, or when there is none to give. The crop's own work comes first whatever is ordered here. At most two
+// are offered: a short job on a field (the hedgerow round a crop in the ground, lowest land first; else the stones
+// of a field with no crop in it, stoniest first), and a tract to fell, brush before woods.
 // who: the people with nothing to do, by id; gain: what the work is for, as a sentence.
 export interface FreeWork { kind: 'brush' | 'rocks' | 'fell'; field: number; who: number[]; gain: string }
 const LAND: JobKind[] = ['brush', 'rocks', 'fell']
-export function freeWork(c: Campaign): FreeWork | null {
+export function idleWork(c: Campaign): { who: number[]; options: FreeWork[] } | null {
   const s = c.season
   if (c.phase !== 'season' || !s || s.frozen || !plantWordGiven(s)) return null
   const who = c.crew.filter(u => u.foreman === '' && u.job < 0 && u.help === undefined && (u.out < 0 || u.out <= s.day)).map(u => u.id)
-  // (an order nobody has taken up yet is work waiting: the people standing are about to go to it)
   if (!who.length || s.jobs.some(j => LAND.includes(j.kind) || !c.crew.some(u => u.job === j.id))) return null
   const can = (kind: JobKind, i: number) => c.fields[i].tenure !== 'none' && jobBlock(c, kind, i) === ''
   const all = c.fields.map((_, i) => i)
   const crop = (i: number) => { const st = s.fields[i].status; return st === 'planted' || st === 'growing' }
+  const options: FreeWork[] = []
   const brush = all.filter(i => crop(i) && can('brush', i)).sort((a, b) => c.fields[a].elev - c.fields[b].elev || a - b)[0]
-  if (brush !== undefined) return { kind: 'brush', field: brush, who, gain: 'Less blight weather and frost on that crop.' }
   const rocks = all.filter(i => can('rocks', i) && c.fields[i].stones >= ROCKS_ADVISE).sort((a, b) => c.fields[b].stones - c.fields[a].stones || a - b)[0]
-  if (rocks !== undefined) return { kind: 'rocks', field: rocks, who, gain: 'Faster planting and digging there, and less bruising.' }
+  if (brush !== undefined) options.push({ kind: 'brush', field: brush, who, gain: 'Cuts back the overgrown hedgerow round the field: less blight weather and frost on that crop.' })
+  else if (rocks !== undefined) options.push({ kind: 'rocks', field: rocks, who, gain: 'Faster planting and digging there, less bruising, and stone for building.' })
   const fell = all.filter(i => can('fell', i)).sort((a, b) => Number(c.fields[a].cover !== 'brush') - Number(c.fields[b].cover !== 'brush') || a - b)[0]
-  if (fell !== undefined) return { kind: 'fell', field: fell, who, gain: 'The first step to a new field.' }
-  return null
+  if (fell !== undefined) options.push({ kind: 'fell', field: fell, who, gain: 'Logs for building or to sell at the mill, and the first step to a new field.' })
+  return options.length ? { who, options } : null
+}
+// The first of them.
+export function freeWork(c: Campaign): FreeWork | null {
+  return idleWork(c)?.options[0] ?? null
 }
 
 // How near the vine kill is, in days, before it is the player's next decision ahead of another spray.

@@ -1,11 +1,13 @@
-// The interface is drawn for a window of about 1600 by 900 CSS pixels. On a larger one it is scaled up whole (CSS
+// The interface is drawn for a window of up to about 1920 by 1080 CSS pixels. On a larger one it is scaled up whole (CSS
 // zoom on the interface's root), so its words and keys keep their share of the screen and stay readable on a big
 // monitor. Under zoom the browser gives rectangles (getBoundingClientRect), the window's size and the pointer in
 // screen pixels, while an element's offset sizes and every length written to its style are in the scaled interface's
 // own pixels: `toScreen` and `toLocal` turn one into the other where the two meet.
 export type ScalePref = 'auto' | '1' | '1.25' | '1.5' | '1.75' | '2'
 
-const BASE_W = 1600, BASE_H = 900
+// (Until 14 November it was scaled up from 1600 by 900: half as large again on a 2560 by 1440 desk, where the owner
+// called its labels huge. From 1920 by 1080 it is a quarter larger there, and its own size at 1920.)
+const BASE_W = 1920, BASE_H = 1080
 let z = 1
 
 // The browsers whose zoom follows the standard (rectangles in screen pixels, offsets in the element's own): the ones

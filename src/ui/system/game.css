@@ -94,9 +94,15 @@
 .topbar .goal.later { --w-side: var(--card); grid-template-columns: 1fr auto; background-color: var(--paper); }
 .topbar .goal.later .goal-t { font-weight: 400; font-style: italic; }
 .topbar .goal-row .goal { flex: 0 1 auto; }
-/* (work for idle people: the slip is as wide as its few words, so it and its key stand on one line under the board
-   without widening it) */
-.topbar .goal-row .goal[data-free] { min-width: 0; }
+/* People with nothing to do: a slip of plain paper under the goal, who they are and the work they can be given, each
+   job a key that names itself. As wide as the board it hangs from, and no wider. */
+.topbar .idle-row { width: 0; min-width: calc(100% - 18px); margin: 6px 0 0 18px; padding: 8px 10px 9px; display: grid; gap: 6px; background: var(--paper) url(img/grain.png); background-blend-mode: multiply; box-shadow: var(--laid); pointer-events: auto; }
+.topbar .idle-say { margin: 0; display: flex; align-items: center; gap: 6px; font: 400 15px/1.2 var(--f-text); }
+.topbar .idle-say .i { --i: 18px; }
+.topbar .idle-keys { display: flex; flex-wrap: wrap; gap: 6px; }
+.topbar .idle-key { min-height: 36px; padding: 0 10px 2px; gap: 6px; font-size: 15px; white-space: nowrap; }
+.topbar .idle-key .i { --i: 18px; }
+.topbar[data-layout='narrow'] .idle-row, .topbar[data-layout='short'] .idle-row { display: none; }
 .topbar .goal-go { padding: 0 12px 3px; margin-top: 6px; font-size: 15px; gap: 6px; }
 .topbar[data-layout='narrow'] .goal-go, .topbar[data-layout='short'] .goal-go { min-height: var(--touch); margin: 4px 0 0 12px; }
 .topbar .goal { text-align: left; min-height: var(--touch); max-width: 100%; }

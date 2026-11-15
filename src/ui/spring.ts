@@ -316,7 +316,7 @@ function equipNeeds(c: S.Campaign, id: S.UpgradeId): string {
   if ((id === 'tractor2' || id === 'tractor3') && !S.hasBuilt(c, 'shed')) return 'Build the machine shed first.'
   if (id === 'tractor3' && !c.upgrades.tractor2) return 'Buy the second tractor first.'
   if (id === 'house2' && S.buildingAt(c, 'house', S.HOME_YARD)) return 'You already have a second potato house, or one is being built.'
-  if (c.cash < u.cost) return `You need ${F.money(u.cost)} in cash, because the bank won't lend for equipment.`
+  if (S.spendBlock(c, u.cost, 'equipment')) return c.phase === 'plan' ? `You need ${F.money(u.cost)} in cash, because the bank won't lend for equipment.` : S.spendBlock(c, u.cost, 'equipment')
   return ''
 }
 

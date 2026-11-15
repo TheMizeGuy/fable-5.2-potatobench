@@ -431,7 +431,9 @@ describe('invalid commands', () => {
       { t: 'deliver', lot: 99999, contract: 1 }, { t: 'deliver', lot: c.lots[0]?.id ?? 1, contract: -7 },
     ]
     if (c.phase !== 'plan') {
-      out.push({ t: 'begin' }, { t: 'buy', upgrade: 'vent' }, { t: 'plan', field: 0, plan: { crop: 'rest', variety: 'katahdin', seed: 'certified' } })
+      // (a machine can be bought outside spring since 14 November: one already owned is still refused)
+      out.push({ t: 'begin' }, { t: 'plan', field: 0, plan: { crop: 'rest', variety: 'katahdin', seed: 'certified' } })
+      if (c.upgrades.vent) out.push({ t: 'buy', upgrade: 'vent' })
       out.push({ t: 'rent', field: 8 }, { t: 'buyLand', field: 8 }, { t: 'release', field: 7 })
       for (const o of c.offers) out.push({ t: 'accept', offer: o.id })
     }

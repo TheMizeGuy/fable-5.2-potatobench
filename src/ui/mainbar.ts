@@ -3,7 +3,7 @@
 // the farm, and a row pressed takes the camera to it.
 import { nextGoal, waitingFor } from '../game/goals.ts'
 import * as S from '../sim/index.ts'
-import { openContracts } from './contracts.ts'
+import { openBuild } from './buildmenu.ts'
 import type { Ctx } from './core.ts'
 import { openCrew, ringFor } from './crew.ts'
 import { h } from './dom.ts'
@@ -120,14 +120,14 @@ export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Camp
     })
   }
 
+  // Build stands first and strong: it is where the farm grows. (Work is under People, with the hiring; contracts
+  // and the almanac are in the menu, and the forecast opens the almanac.)
   const TABS: [string, string, () => void][] = [
+    ['build', 'Build', () => openBuild(ctx)],
     ['todo', 'To do', openTodo],
     ['fields', 'Fields', openFields],
     ['people', 'People', openPeople],
-    ['work', 'Work', () => o.onWork()],
     ['money', 'Money', () => o.onMoney()],
-    ['contracts', 'Contracts', () => openContracts(ctx)],
-    ['almanac', 'Almanac', () => o.onAlmanac()],
     ['menu', 'Menu', () => o.onMenu()],
   ]
 
@@ -141,8 +141,8 @@ export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Camp
       const k = `${c.phase}|${n}`
       if (k === key) return
       key = k
-      el.replaceChildren(...TABS.map(([id, name, open]) => h('button', { class: `mb-tab${id === 'todo' && n ? ' has' : ''}`, type: 'button', testid: `bar-${id}`, onclick: open },
-        name, id === 'todo' && n ? h('span', { class: 'mb-n num', 'aria-label': `${n} waiting` }, String(n)) : null)))
+      el.replaceChildren(...TABS.map(([id, name, open]) => h('button', { class: `mb-tab${id === 'todo' && n ? ' has' : ''}${id === 'build' ? ' build' : ''}`, type: 'button', testid: `bar-${id}`, onclick: open },
+        id === 'build' ? icon('hammer', 'i') : null, name, id === 'todo' && n ? h('span', { class: 'mb-n num', 'aria-label': `${n} waiting` }, String(n)) : null)))
     },
   }
 }

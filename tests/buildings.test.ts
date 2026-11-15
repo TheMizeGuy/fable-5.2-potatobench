@@ -86,11 +86,37 @@ describe('building', () => {
     expect(c.crew[0].xp.build + c.crew[0].skills.build).toBeGreaterThan(S.FARMER_SKILLS.build)
   })
 
-  it('cannot be paid for on credit', () => {
+  it('cannot be paid for on credit in spring', () => {
     const c = S.createCampaign(world, { seed: 1, startYear: 1990 })
     c.cash = 1000
     refused(c, { t: 'build', kind: 'shed', yard: HOME }, /can't afford it yet/)
     expect(S.buildingInfo(c).find(b => b.kind === 'shed')!.why).toMatch(/can't afford it yet/)
+    expect(S.spendable(c)).toBe(1000)
+  })
+
+  // The owner, 14 November: "the freedom like whats building etc how do you get upgrades". A first year is played
+  // on the spring loan from its first day: with nothing lent for anything that lasts, nothing could be built in it.
+  it('once the season is under way the bank lends for a building or a machine, until the farm owes BUILD_CREDIT in all', () => {
+    const c = S.createCampaign(world, { seed: 1, startYear: 1990 })
+    ok(c, { t: 'begin' })
+    expect(c.cash, 'a first season is on the loan').toBeLessThan(0)
+    const owed = -c.cash
+    expect(S.spendable(c)).toBeCloseTo(S.BUILD_CREDIT - owed)
+    // A farm stand, and its work is on the list for the crew.
+    const stand = S.buildCost(c, 'stand').total
+    ok(c, { t: 'build', kind: 'stand', yard: HOME })
+    expect(c.cash).toBeCloseTo(-owed - stand)
+    expect(c.season!.jobs.some(j => j.kind === 'build')).toBe(true)
+    // A machine, bought in the season: it is the farm's from that day, and is not taken back.
+    ok(c, { t: 'buy', upgrade: 'boom' })
+    expect(c.upgrades.boom).toBe(true)
+    refused(c, { t: 'unbuy', upgrade: 'boom' }, /only be undone in spring/)
+    refused(c, { t: 'buy', upgrade: 'boom' }, /already own/)
+    // At the end of what the bank lends, the next thing is refused, and the reason says where the farm stands.
+    c.cash = -S.BUILD_CREDIT + 500
+    refused(c, { t: 'build', kind: 'station', yard: HOME }, /the bank lends until you owe \$30,000 \(you owe \$29,500\)/)
+    refused(c, { t: 'buy', upgrade: 'truck' }, /can't afford it yet/)
+    expect(S.spendable(c)).toBe(500)
   })
 
   it('goes on through the winter with someone kept on to build', () => {
