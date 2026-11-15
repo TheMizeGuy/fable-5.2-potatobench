@@ -520,10 +520,8 @@ test('the note for a field\'s record has a place where the record leaves only a 
     await expect(page.getByTestId('plan-card')).toBeVisible()
     await expect.poll(laid, { timeout: 15_000, message: `the note with ${field}'s record open` }).toBe('placed')
     await picture(page, `b-spring-record-${field.split(' ')[0].toLowerCase()}-1280`)
-    await page.locator('#ui [data-testid="plan-card"] button.close').first().click()
-    await expect(page.getByTestId('plan-card')).toBeHidden()
-    // (the note is the first record's: closing it passes the step, so the second field is only looked at if the
-    // first was not on the land)
+    // (the note is the first record's, so the second field is only looked at if the first was not on the land;
+    // closing the record is the walk's to try, above)
     break
   }
   expect(errors, errors.join('\n')).toEqual([])

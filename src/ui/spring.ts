@@ -316,7 +316,7 @@ export function equipNeeds(c: S.Campaign, id: S.UpgradeId): string {
   if ((id === 'tractor2' || id === 'tractor3') && !S.hasBuilt(c, 'shed')) return 'Build the machine shed first.'
   if (id === 'tractor3' && !c.upgrades.tractor2) return 'Buy the second tractor first.'
   if (id === 'house2' && S.buildingAt(c, 'house', S.HOME_YARD)) return 'You already have a second potato house, or one is being built.'
-  if (S.spendBlock(c, u.cost, 'equipment')) return c.phase === 'plan' ? `You need ${F.money(u.cost)} in cash, because the bank won't lend for equipment.` : S.spendBlock(c, u.cost, 'equipment')
+  if (S.spendBlock(c, u.cost, 'equipment')) return c.phase === 'plan' ? `You need ${F.money(u.cost)} in cash: in spring the bank won't lend for equipment.` : S.spendBlock(c, u.cost, 'equipment')
   return ''
 }
 
@@ -336,7 +336,7 @@ function equipmentBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, on
           : h('button', {
             class: 'btn cat-buy', type: 'button', testid: `buy-${id}`, disabled: !!why, title: why || undefined,
             onclick: () => tryRun(ctx, { t: 'buy', upgrade: id }, onTry, true),
-          }, 'Buy', h('span', { class: 'sub num' }, F.money(u.cost)), loanSays(u.cost, loanAdds(u.cost)) ? h('span', { class: 'loan-adds num' }, loanSays(u.cost, loanAdds(u.cost))) : null,
+          }, 'Buy', h('span', { class: 'sub num' }, F.money(u.cost)), !why && loanSays(u.cost, loanAdds(u.cost)) ? h('span', { class: 'loan-adds num' }, loanSays(u.cost, loanAdds(u.cost))) : null,
           why ? null : h('span', { class: 'loan-adds num year-end', testid: `buy-${id}-year-end` }, yearEnd(ctx, { t: 'buy', upgrade: id }))))
     })),
     done('equipment-close', onClose),
