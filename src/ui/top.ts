@@ -192,7 +192,7 @@ export function outlook(ctx: Ctx, c: S.Campaign): Outlook {
   const head = c.phase === 'cellar' ? 'If you sold everything in storage today:' : 'If the crop sold today:'
   const says = `${range}${verdict}`.trim()
   return {
-    figure, before: false, spread, risk: m.callRisk, label: 'Year-end forecast', look: S.moneyLook(world, c), lines, head, says,
+    figure, before: false, spread, risk: m.callRisk, label: 'Year-end cash', look: S.moneyLook(world, c), lines, head, says,
     reach: !!spread && m.range.lo < S.CREDIT_LIMIT,
     why: `${head} ${lines.map(p => `${p.label} ${signed(p.amount)}`).join(', ')}, which makes ${F.money(figure)} after year-end bills. ${says}`.trim(),
   }
@@ -539,10 +539,10 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const busy = !callFirst && !!mine && !!idleWork(c)
     if (callFirst || mine || (season && g && !reach && wait <= 0)) {
       const quiet = h('button', {
-        class: `goal${callFirst ? '' : ' later'}`, type: 'button', testid: 'goal', k: callFirst ? `goal-call-${call!.id}` : `goal-later-${g!.id}`, 'data-waiting': mine ? 'crew' : undefined, 'aria-expanded': String(pop === 'goals'),
+        class: `goal${callFirst || busy ? '' : ' later'}`, type: 'button', testid: 'goal', k: callFirst ? `goal-call-${call!.id}` : `goal-${busy ? 'busy' : 'later'}-${g!.id}`, 'data-waiting': mine ? 'crew' : undefined, 'aria-expanded': String(pop === 'goals'),
         title: ctx.touch() ? undefined : callFirst ? F.localize(call!.why) : g!.why,
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
-      }, callFirst ? fist() : null, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, callFirst ? 'Now: ' : 'Next goal: '),
+      }, callFirst || busy ? fist() : null, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, callFirst || busy ? 'Now: ' : 'Next goal: '),
         h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text).replace(/\.$/, '') : busy ? 'Keep your crew busy' : mine ? mine.title : g!.title),
         callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g && !crewOwn(g) ? h('span', { class: 'goal-when' }, `then ${g.title.toLowerCase()}${reach ? '' : ` (${notYet(c, g)})`}`) : null) : h('span', { class: 'goal-when' }, busy ? `${mine!.title}${/^due /.test(mine!.when) ? `, ${F.localize(mine!.when.split(',')[0])}` : ''}` : `${mine ? F.localize(mine.when) : notYet(c, g!)}${then ? ` · ${then}` : ''}`)),
       h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Press to open your goals.`))
@@ -690,8 +690,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
               phone ? balance : null),
             season ? seasonTrack(c) : null,
             season ? phaseRow(c) : null),
-          goalSlip(c, g, gone, season),
-          season ? idleRow(c) : null,
+          // (with somebody idle the slip and the keys that give them work are one card: one thing to do, said once)
+          ...((): Child[] => { const slip = goalSlip(c, g, gone, season), idle = season ? idleRow(c) : null; return idle ? [h('div', { class: 'goal-stack' }, slip, idle)] : [slip] })(),
           pop === 'goals' ? ladder(c, g) : null,
           phone ? money : null),
         phone ? null : h('section', { class: 'bank', 'aria-label': 'Money, game speed and contracts' },

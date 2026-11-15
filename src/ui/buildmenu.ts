@@ -24,7 +24,7 @@ const plain = (t: string): string => t.replace(/\bcwt\b/g, 'hundredweight').repl
 // (each from the catalogue's own figures: src/sim/params.ts, BUILDINGS and UPGRADES)
 const BUILD_GIST: Record<S.BuildingKind, string> = {
   house: '+3,600 hundredweight of storage', shed: 'Machine work 15% faster', bunk: '+6 beds for hired people', packing: '+15% sale price in winter',
-  pond: 'Water for six waterings', stand: 'Sells at twice the price', station: 'Better forecasts', road: 'Travel and hauling 30% faster',
+  pond: 'Stores six waterings', stand: 'Sells at twice the market price', station: 'Better forecasts', road: 'Travel and hauling 30% faster',
 }
 const UPGRADE_GIST: Record<S.UpgradeId, string> = {
   boom: 'Spraying 2.5\u00d7 faster', harvester: 'Digging 1.6\u00d7 faster', vent: 'More storage, less rot', reel: 'Watering 2\u00d7 faster',
@@ -46,7 +46,7 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
       id: `build-${b.kind}`, glyph: BUILD_GLYPH[b.kind], name: b.name, gist: BUILD_GIST[b.kind], does: plain(b.does),
       price: F.money(b.total), cost: b.total,
       tag: b.kind === 'stand' && b.state === 'none' ? 'The cheapest building: a good first one' : undefined,
-      sub: `Your crew builds it in about ${F.plural(crewDays, 'day')}${mats ? ` · ${mats}, ${bought ? 'bought in the price' : 'from your yard'}` : ''}`,
+      sub: `Your crew builds it in about ${F.plural(crewDays, 'day')}${mats ? ` · ${mats}, ${bought ? 'included in the price' : 'from your yard'}` : ''}`,
       state: b.state === 'built' ? 'have' : b.state === 'building' ? 'doing' : b.ok ? 'can' : 'no',
       why: b.state === 'built' ? 'Built' : b.state === 'building' ? `Going up: ${F.pct(b.progress)} built` : b.ok ? '' : first(b.why),
       label: 'Build', run: () => run({ t: 'build', kind: b.kind, yard: S.HOME_YARD }),
@@ -133,7 +133,7 @@ export function openBuild(ctx: Ctx): void {
           h('div', { class: 'bm-get' },
             x.state === 'can' && x.run ? [h('button', { class: 'btn go bm-key', type: 'button', testid: `${x.id}-go`, onclick: x.run }, x.label, x.price && x.price !== 'No cost' ? h('span', { class: 'num bm-price' }, x.price) : null),
               // What the purchase leaves of the year-end forecast, so its price is read against the goal.
-              money && x.cost ? h('span', { class: `bm-left t-caption num${money.after - x.cost < 0 ? ' c-red' : ''}`, testid: `${x.id}-left` }, `${c.cash - x.cost < 0 ? 'Goes on your loan' : 'Paid from your cash'}. Year-end forecast: ${F.money(Math.round((money.after - x.cost) / 100) * 100)}`) : null]
+              money && x.cost ? h('span', { class: `bm-left t-caption num${money.after - x.cost < 0 ? ' c-red' : ''}`, testid: `${x.id}-left` }, `${c.cash - x.cost < 0 ? 'Goes on your loan' : 'Paid from your cash'}. Year-end cash: ${F.money(Math.round((money.after - x.cost) / 100) * 100)}`) : null]
               : [x.price ? h('span', { class: 'num bm-price' }, x.price) : null, h('span', { class: `bm-why${x.state === 'have' ? ' ok' : ''}` }, x.state === 'have' ? [icon('check', 'i'), x.why] : x.why)]))
         const groups = items(ctx, c, (text, ok) => { said = { text, ok }; draw() })
         const head = h('div', { class: 'bm-head' },
