@@ -615,8 +615,11 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   }
   // One voice: a card that wants an answer (a telegram, the spraying question, a paper) speaks alone.
   function cardUp(l: Look): boolean {
-    return !!l.paper || l.asking === 'spray' || ctx.awaiting > 0 || ctx.papers.pending() > 0 || shown(root.querySelector('.telegram:not(.guide-card)')) || shown(root.querySelector('.tray-paper'))
+    return !!l.paper || l.asking === 'spray' || ctx.awaiting > 0 || ctx.papers.pending() > 0 || asked() || shown(root.querySelector('.telegram:not(.guide-card)')) || shown(root.querySelector('.tray-paper'))
   }
+  // A question the season has for the player, known from the farm itself: its telegram is drawn later in the same
+  // frame than the guide is looked at, so going by the page alone left a tip up beside it for one frame.
+  const asked = (): boolean => app.screen === 'season' && (app.campaign?.incidents.length ?? 0) > 0
 
   function render(): void {
     const c = app.campaign
@@ -823,7 +826,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       since += dt
       // One voice: a card that comes while a tip is up (a telegram, a paper, the test-dig tray) has the tip put away
       // in the same frame, not at the next look.
-      if (shownId && (ctx.awaiting > 0 || ctx.papers.pending() > 0 || shown(root.querySelector('.telegram:not(.guide-card)')) || shown(root.querySelector('.tray-paper')))) stale = true
+      if (shownId && (ctx.awaiting > 0 || ctx.papers.pending() > 0 || asked() || shown(root.querySelector('.telegram:not(.guide-card)')) || shown(root.querySelector('.tray-paper')))) stale = true
       if (stale || since > 300) {
         stale = false
         since = 0
