@@ -476,7 +476,10 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     if (fits && placed!.size !== sized) {
       // Its own height changed (an order given, a stamp's line under the pointer): its top left corner stays where
       // it is, so nothing in it moves under the pointer; it grows downward, or scrolls where there is no more room.
-      const h = Math.min(size.h, roomUnder(placed!.x, placed!.y, size.w, land.win, land.blocks) - placed!.y)
+      // (what it is tied to, where that lies under it, ends its room as a bar would: a card standing over its tag
+      // never grows down onto the tag, which would send it off to another side from under the pointer)
+      const under = t.keep && t.keep.top >= placed!.y ? [...land.blocks, t.keep] : land.blocks
+      const h = Math.min(size.h, roomUnder(placed!.x, placed!.y, size.w, land.win, under) - placed!.y)
       if (h >= Math.min(size.h, least ?? 160)) placed = { ...placed!, h, size: sized }
       else fits = false
     }
