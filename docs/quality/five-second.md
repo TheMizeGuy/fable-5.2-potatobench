@@ -135,3 +135,15 @@ The later screen moved for the first time (one canary card, the work list's chip
 is where both still ask for more: when a building pays back, and whether its logs and stone have to be got. Done
 from that in `live-68`, not re-marked: each building's small line says when it is worth its price (in words: the
 game has a sum only for the farm stand, which its row gives), and its materials are on its slip, not on its row.
+
+## Eighth pass, on `live-69`
+
+| | first screen | later | build menu |
+|---|---|---|---|
+| strategy player | 8 | 6 | 6 |
+| casual player | 8 | 6 | 7 |
+
+The marks have settled within a point of each other from pass to pass: the first screen at 8, the later screen at 6
+or 7, the build menu at 6 or 7. What both still asked for, done in `live-70` and not re-marked: the key says "Plant
+all"; the idle keys say what the work brings ("Cut trees: logs"); a build row shows the year-end cash from and to,
+at the weight of a figure; the line about the vine kill says it is for harvest.
