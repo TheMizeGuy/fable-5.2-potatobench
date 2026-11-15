@@ -298,7 +298,9 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'list', part: 'year', name: 'The work list', read: true, reveals: ['list'],
-    when: l => inSeason(l) && auto(l, 'spray') && jobOn(l, 'spray'),
+    // (once it has come it stays until it has been read: tied only to a spray being on the list, it went with each
+    // spray as the days ran fast and came back with the next, eight times in a season)
+    when: (l, g) => inSeason(l) && auto(l, 'spray') && (jobOn(l, 'spray') || g.has('show:list')),
     done: (_l, g) => g.has('noted:list'),
     ask: () => 'Your crew sprays on its own now.',
     why: () => 'The work list at the bottom shows their jobs in order.',

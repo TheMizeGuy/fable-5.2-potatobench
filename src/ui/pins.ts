@@ -113,18 +113,37 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
     }
     // People standing together share a pin: the picked one, or the one who needs the player, leads it.
     const order = [...models].filter(m => at.has(m.id)).sort((p, q) => p.rank - q.rank || p.id - q.id)
+    // Seen from near, a person is their own figure, to be read and pressed as one: whoever stands taller on the
+    // screen than a pin wears their name, alone, and shares no pin. (The owner, 15 November, of two people side by
+    // side at a barn door with one face over a head and a "2" beside it: "it still keeps the icon over npcs even at
+    // close zoom". The face gave way only for someone standing alone.)
+    const tallOf = new Map<number, number>()
+    const nearNow = new Set<number>()
+    for (const m of order) {
+      const foot = ctx.view.unitFoot(m.id)
+      const tall = Number.isFinite(foot.y) ? Math.max(0, foot.y - at.get(m.id)!.y) : 0
+      tallOf.set(m.id, tall)
+      if (tall > toScreen(wasNear.has(m.id) ? NEAR_TALL - 6 : NEAR_TALL)) nearNow.add(m.id)
+    }
+    for (const m of models) { if (nearNow.has(m.id)) wasNear.add(m.id); else wasNear.delete(m.id) }
     const taken = new Set<number>()
     const shown = new Map<number, { m: Model; x: number; y: number; members: Model[] }>()
+    // Names of people standing side by side step up clear of each other.
+    const plates: { x: number; y: number }[] = []
     for (const m of order) {
       if (taken.has(m.id)) continue
       const p = at.get(m.id)!
-      const members = order.filter(x => !taken.has(x.id) && Math.hypot(at.get(x.id)!.x - p.x, at.get(x.id)!.y - p.y) < NEAR)
+      const members = nearNow.has(m.id) ? [m] : order.filter(x => !taken.has(x.id) && !nearNow.has(x.id) && Math.hypot(at.get(x.id)!.x - p.x, at.get(x.id)!.y - p.y) < NEAR)
       for (const x of members) taken.add(x.id)
       // A pin stays over its person even where a tag or a yard's tag lies there: it is drawn above them, so a click on
       // the person never lands on the tag instead.
       // A stamp that asks for the player is the one thing a pin gives way to: it stands just above it.
       let y = p.y
       for (const r of stamps) if (p.x > r.left - 20 && p.x < r.right + 20 && y > r.top - 2 && y - 56 < r.bottom) y = r.top - 2
+      if (nearNow.has(m.id)) {
+        for (let k = 0; k < 4 && plates.some(q => Math.abs(q.x - p.x) < toScreen(70) && Math.abs(q.y - y) < toScreen(20)); k++) y -= toScreen(22)
+        plates.push({ x: p.x, y })
+      }
       if (y - 56 < (m.id === app.unit && o.board ? Math.min(ins.top, o.board()) : ins.top) + 4) continue
       shown.set(m.id, { m, x: p.x, y, members })
     }
@@ -146,10 +165,8 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
       // Seen from near, a person is their own figure (the owner, 14 November: "the icons stay over the character at
       // too close of a range and block their models"): once they stand taller on the screen than the pin itself,
       // the face gives way to their name alone, and at every range the pin stands clear above the head.
-      const foot = ctx.view.unitFoot(m.id)
-      const tall = s0.members.length === 1 && Number.isFinite(foot.y) ? Math.max(0, foot.y - s0.y) : 0
-      const near = tall > toScreen(wasNear.has(m.id) ? NEAR_TALL - 6 : NEAR_TALL)
-      if (near) wasNear.add(m.id); else wasNear.delete(m.id)
+      const tall = s0.members.length === 1 ? tallOf.get(m.id) ?? 0 : 0
+      const near = nearNow.has(m.id)
       // (a name stands right over the head; a face pin is lifted a little clear of it)
       const lift = near ? 0 : Math.min(tall * 0.12, toScreen(26))
       draw(w, m, s0.members.length, s0.members, near)

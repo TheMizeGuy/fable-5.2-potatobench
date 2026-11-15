@@ -238,3 +238,55 @@ test('seen from near, a person wears their name over their head and no face cove
   expect(s.name!.b, `the name's foot (${Math.round(s.name!.b)}) against the top of the head (${Math.round(s.tip.y)})`).toBeLessThanOrEqual(s.tip.y + 1)
   expect(errors, errors.join('\n')).toEqual([])
 })
+
+// The owner, 15 November, with a picture of two people side by side at the barn door, one face over a head and a "2"
+// beside it: "it still keeps the icon over npcs even at close zoom". The face gave way to a name only for someone
+// standing alone; people who stood together shared one face pin at any range.
+test('two people standing together, seen from near, each wear their own name: no face, and no count', async ({ page, isMobile, browserName }) => {
+  test.skip(isMobile || browserName !== 'chromium', 'read through the 3D view\'s hooks')
+  const errors = watchErrors(page)
+  await page.setViewportSize({ width: 1600, height: 900 })
+  await startSeason(page)
+  // Two hired hands with no work yet: they stand about together in the dooryard, by the barn.
+  await reach(page, `const { app } = q.g(); const c = app.campaign; c.cash += 20000; app.do({ t: 'hire', kind: 'hand' }); app.do({ t: 'hire', kind: 'hand' }); app.setSpeed(0); app.select(-1); app.selectUnit(-1)`)
+  await putAway(page)
+  type Hooks = { __countyField: { unitPin(id: number): { x: number; y: number; visible: boolean }; unitFoot(id: number): { x: number; y: number }; rig: { moving(): boolean } } }
+  const seen = () => page.evaluate(() => {
+    const F = (globalThis as unknown as Hooks).__countyField
+    const box = (e: Element | null | undefined) => { const r = e?.getBoundingClientRect(); return r && r.width > 0 ? { l: r.left, t: r.top, r: r.right, b: r.bottom } : null }
+    return [1, 2].map(id => {
+      const w = document.querySelector<HTMLElement>(`#ui .plate-layer [data-testid="pin-${id}"]`)?.closest<HTMLElement>('.pin-at')
+      const tip = F.unitPin(id), foot = F.unitFoot(id)
+      return { id, near: !!w?.classList.contains('near'), gone: !w || w.classList.contains('gone'), head: box(w?.querySelector('.head')), count: box(w?.querySelector('.badge.count')), name: box(w?.querySelector('.name')), tip, tall: foot.y - tip.y }
+    })
+  })
+  await page.getByTestId('bar-people').click()
+  await page.getByTestId('people-go-1').click()
+  await page.waitForTimeout(600)
+  await page.waitForFunction(() => !(globalThis as unknown as Hooks).__countyField.rig.moving(), null, { timeout: 15_000 })
+  await reach(page, `q.g().app.selectUnit(-1)`)
+  await page.waitForTimeout(600)
+  for (let n = 0; n < 14 && (await seen())[0].tall < 70; n++) {
+    const at = (await seen())[0].tip
+    await page.mouse.move(at.x, at.y + 20)
+    await page.mouse.wheel(0, -500)
+    await page.waitForTimeout(500)
+  }
+  await page.mouse.move(8, 400)
+  await page.waitForTimeout(900)
+  const both = await seen()
+  // Side by side on the screen, within a shared pin's reach, as the two at the barn door were. (On the build before
+  // the fix this test fails here on: one of the two has no name, and the other carries a face and a count.)
+  expect(Math.hypot(both[0].tip.x - both[1].tip.x, both[0].tip.y - both[1].tip.y), JSON.stringify(both)).toBeLessThan(60)
+  for (const s of both) {
+    expect(s.gone, `person ${s.id}: ${JSON.stringify(s)}`).toBe(false)
+    expect(s.near, `person ${s.id} is seen from near`).toBe(true)
+    expect(s.head, `person ${s.id}: no face is drawn`).toBeNull()
+    expect(s.count, `person ${s.id}: no count of people`).toBeNull()
+    expect(s.name, `person ${s.id}: their name is`).not.toBeNull()
+  }
+  // The two names do not lie on each other.
+  const a = both[0].name!, b = both[1].name!
+  expect(a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t, `the names overlap: ${JSON.stringify([a, b])}`).toBe(false)
+  expect(errors, errors.join('\n')).toEqual([])
+})
