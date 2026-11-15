@@ -378,6 +378,7 @@ export function workGrid(ctx: Ctx): WorkGrid {
     }, h('i', { class: `tick${on ? ' on' : ''}`, 'aria-hidden': 'true' }), h('span', null, h('b', null, name), ' ', h('span', { class: 'quiet' }, why)))
     // Which jobs the crew puts on the list by itself, and which wait for the player.
     const routine = S.routineInfo(c)
+    const sprayCost = c.phase === 'season' && c.season && !routine.some(r => r.kind === 'spray' && r.auto) ? Math.round(S.sprayOutlook(ctx.app.world, c).dollars / 100) * 100 : 0
     return h('div', { class: 'farm-rules', role: 'group', 'aria-label': 'Farm rules' },
       routine.length ? h('div', { class: 'routine', role: 'group', 'aria-label': 'Work your crew does without asking' },
         h('p', { class: 't-label' }, 'Automatic, or ask me'),
@@ -387,7 +388,9 @@ export function workGrid(ctx: Ctx): WorkGrid {
           class: `btn${r.auto ? ' is-on' : ''}`, type: 'button', testid: `routine-${r.kind}`, 'aria-pressed': String(r.auto),
           title: ctx.touch() ? undefined : r.auto ? `${R.JOB_VERB[r.kind]}: your crew adds it to the work list automatically. Click to be asked instead.` : `${R.JOB_VERB[r.kind]}: waits for your order. Click to let your crew handle it automatically.`,
           onclick: () => { const res = ctx.run({ t: 'routine', kind: r.kind as S.RoutineKind, auto: !r.auto }); if (res.ok) ctx.announce(`${R.JOB_VERB[r.kind]}: ${r.auto ? 'ask me' : 'automatic'}.`) },
-        }, icon(r.kind, 'i'), R.JOB_VERB[r.kind], h('span', { class: 'sub' }, r.auto ? 'automatic' : r.kind === 'kill' ? 'your decision, but the crew does it a week after it\'s due' : 'ask me'))))) : null,
+        }, icon(r.kind, 'i'), R.JOB_VERB[r.kind], h('span', { class: 'sub' }, r.auto ? 'automatic' : r.kind === 'kill' ? 'your decision, but the crew does it a week after it\'s due'
+            // (what keeping the fields sprayed would come to, before the press: a player threw the switch and saw $4,800 leave the year-end figure)
+            : r.kind === 'spray' && sprayCost > 0 ? `ask me \u00b7 automatic is about ${F.money(sprayCost)} this season` : 'ask me'))))) : null,
       rule('rule-sundays', l.sundaysOff, 'Sundays off', l.sundaysOff ? 'Everyone rests one day a week. Working Sundays gains you a day, but it tires everyone out.' : 'Sundays are worked, which gives you an extra day each week but tires everyone out.'),
       // Pickers come forward a few weeks before the harvest break, when they can be thought about.
       l.pickers.ok || l.pickers.on || pickersNear(c)

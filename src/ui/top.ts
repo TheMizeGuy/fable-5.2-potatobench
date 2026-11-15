@@ -524,7 +524,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     // While the soil warms there is nothing to do but wait: a key beside the slip lets the weeks go by at 3x.
     const faster = wait > 0 && app.speed < 3 && !S.seasonDone(c)
       ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-faster', title: ctx.touch() ? undefined : 'Runs fast until there\'s something for you to decide, then goes back to the speed you had', onclick: () => app.skipAhead() },
-        icon('fast', 'i'), `Skip ahead at ${SPEED_X[3]}`) : null
+        icon('fast', 'i'), 'Skip ahead') : null
     // The fist points only at what can be done now and paid for: the season's pressing call first (a long goal waits
     // in the quiet line under it), then the goal when its control can be reached; anything else is said quietly.
     const reach = !!g && wait <= 0 && g.now && !g.block && (o.canShow?.(g) ?? false)
@@ -548,7 +548,12 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text).replace(/\.$/, '') : busy ? 'Keep your crew busy' : mine ? mine.title : g!.title),
         callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g && !crewOwn(g) ? h('span', { class: 'goal-when' }, `then ${g.title.toLowerCase()}${reach ? '' : ` (${notYet(c, g)})`}`) : null) : h('span', { class: 'goal-when' }, busy ? `${mine!.title}${/^due /.test(mine!.when) ? `, ${F.localize(mine!.when.split(',')[0])}` : ''}` : `${mine ? F.localize(mine.when) : notYet(c, g!)}${then ? ` · ${then}` : ''}`)),
       h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Press to open your goals.`))
-      const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel) : null
+      const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel)
+        // Waiting on the crop with nothing to decide: the same key as while the soil warms. (Round ten: all three players'
+        // first complaint was the waiting, "a 'skip to the next thing that needs me' button".)
+        : mine && !busy && season && !S.seasonDone(c) && app.skipBack === 0 ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-faster', title: ctx.touch() ? undefined : 'Runs the days fast until there\'s something for you to decide, then goes back to the speed you had', onclick: () => app.skipAhead() },
+          icon('fast', 'i'), 'Skip ahead')
+          : null
       return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet
     }
     const doIt = g && reach && o.show ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => showGoal(g) }, icon('arrow', 'i'), 'Show me') : null
@@ -620,7 +625,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x), x.block, x.now && !x.done && !!o.canShow?.(x)]) : 0, reach: g ? !!o.canShow?.(g) : false,
       call: season ? pressing(c)?.id ?? '' : '', block: g?.block ?? '', view: view?.why ?? '', moved: moved?.text ?? '', last: lastMoved, why: whyNow ? [whyNow.text, whyNow.ask, remedied(c)] : '', by: popBy,
       jobs: season ? [...new Set(c.season!.jobs.map(j => j.kind))].sort().join() : '', auto: season ? S.routineInfo(c).filter(r => r.auto).map(r => r.kind).join() : '',
-      k: season || c.phase === 'cellar' ? contracts.key() : 0, ph: season ? phaseNow(c) : '', mine: season ? waitingFor(c, app.world) : 0, free: season ? idleWork(c) : 0,
+      k: season || c.phase === 'cellar' ? contracts.key() : 0, ph: season ? phaseNow(c) : '', mine: season ? waitingFor(c, app.world) : 0, free: season ? idleWork(c) : 0, skip: app.skipBack,
     }
     el.dataset.phase = c.phase
     el.dataset.layout = layout

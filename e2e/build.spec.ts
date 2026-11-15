@@ -140,6 +140,38 @@ test('the To do sheet says what is coming once', async ({ page, isMobile }) => {
   expect(errors, errors.join('\n')).toEqual([])
 })
 
+// Round ten: all three players' first complaint was waiting at the fastest speed with nothing asked of them. The slip
+// offers Skip ahead whenever the player is only waiting on the crop, as it did only while the soil warmed.
+test('waiting on the crop, the slip offers Skip ahead, and the days go faster than the fastest speed until the player takes the clock back', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desk')
+  test.setTimeout(180_000)
+  const errors = watchErrors(page)
+  await startSeason(page)
+  // Every potato field planted, the crew's routine left on, and felling on the list so nobody stands idle.
+  await reach(page, `const { app, sim } = q.g(); const c = app.campaign; app.do({ t: 'sprayWay', way: 'auto' })
+    for (let k = 0; k < 90 && c.season.fields.some((f, i) => sim.isField(c, i) && f.status === 'idle'); k++) { c.incidents = []; for (const a of sim.advise(app.world, c)) if (a.act === 'plant') app.order('plant', { fields: [a.field] }); app.do({ t: 'day' }) }
+    c.incidents = []; const tract = c.fields.findIndex((_, i) => sim.jobBlock(c, 'fell', i) === ''); app.order('fell', { fields: [tract] }); app.setSpeed(0)`)
+  await putAway(page)
+  const skip = page.getByTestId('goal-faster')
+  await expect(skip).toBeVisible({ timeout: 10_000 })
+  await expect(skip).toHaveText('Skip ahead')
+  const day = () => game<number>(page, 'c.season.day')
+  const from = await day()
+  await skip.click()
+  expect(await game<number>(page, 'app.skipBack')).toBeGreaterThan(0)
+  await expect(page.getByTestId('running-stop')).toContainText('Skipping ahead')
+  await expect(skip).toHaveCount(0)
+  // Twenty seconds: at the fastest speed alone that is two days.
+  const t0 = Date.now()
+  await expect.poll(async () => { await game(page, 'c.incidents.length && (c.incidents = [], app.skipAhead()), 0'); return (await day()) - from }, { timeout: 40_000, intervals: [1000] }).toBeGreaterThanOrEqual(5)
+  expect(Date.now() - t0, 'milliseconds five days took while skipping').toBeLessThan(32_000)
+  // The clock taken back: an ordinary speed, and the key is offered again.
+  await page.getByTestId('speed-1').click()
+  expect(await game<number>(page, 'app.skipBack')).toBe(0)
+  await expect(skip).toBeVisible()
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
 // The work list's ringed initials had to be learned ("what are the letters?", viewers of every pass): at a wide desk
 // an order's chip carries the name of whoever has it.
 test('at a wide desk an order on the work list names who has it', async ({ page, isMobile }) => {

@@ -27,6 +27,8 @@ export const DAY_HOURS = DAY_STRETCHES
 const LADDERS = { long: [0, 1 / DAY_SECONDS, 3 / DAY_SECONDS, 6 / DAY_SECONDS], brisk: [0, 0.25, 0.75, 2] }
 // Seconds a day with no work in it takes while the player skips ahead (null: the test clock, where every day is short).
 const QUIETS: Record<keyof typeof LADDERS, number[] | null> = { long: [0, 2, 2, 2], brisk: null }
+// While the player skips ahead, how much faster than the fastest speed a day's working hours go.
+const SKIP_WORK = 2.5
 export let QUIET_S: number[] | null = QUIETS.long
 // A new farm's field hands, and a season of a hand's wages (seven months at the hall's rate).
 export const START_HANDS = 2
@@ -816,7 +818,8 @@ export class App {
       // (only while the player skips ahead does time with no work in it go by quickly)
       const quiet = this.skipBack > 0 && this.quietNow(c)
       this.hurrying = quiet
-      this.dayProgress += (Math.min(dtMs, 250) / 1000) * (quiet ? 1 / QUIET_S![this.speed] : DAYS_PER_SECOND[this.speed] * this.pace)
+      // (and the hours with work in them at SKIP_WORK times the fastest speed: the player asked for the next decision)
+      this.dayProgress += (Math.min(dtMs, 250) / 1000) * (quiet ? 1 / QUIET_S![this.speed] : DAYS_PER_SECOND[this.speed] * this.pace * (this.skipBack > 0 && QUIET_S ? SKIP_WORK : 1))
       // A watched day is counted as it goes: by the hour (and no oftener than every three seconds of play) the farm's
       // own count has the work done so far, so the work list, a person's card and what the day brings (a field
       // planted, barrels to haul, a test dig's tray) keep up with what is seen. Always to the hour: the crews' work is

@@ -911,8 +911,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     running.hidden = app.speed === 0 || S.seasonDone(c) || (stoppedFor && layout !== 'narrow') || (layout === 'narrow' && app.selection.length > 0)
     if (!running.hidden && !wasRunning) ranAt = performance.now()
     if (!running.hidden) {
-      patch(running, JSON.stringify([ctx.touch(), app.speed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'running-stop', onclick: () => { if (!app.pressPause()) { ranAt = performance.now(); ctx.dirty() } } },
-        icon('pause', 'i'), `Running at ${SPEED_X[app.speed]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
+      patch(running, JSON.stringify([ctx.touch(), app.speed, app.skipBack > 0]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'running-stop', onclick: () => { if (!app.pressPause()) { ranAt = performance.now(); ctx.dirty() } } },
+        icon('pause', 'i'), app.skipBack > 0 ? 'Skipping ahead' : `Running at ${SPEED_X[app.speed]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
       running.classList.toggle('lit', performance.now() - ranAt < 2400)
       if (performance.now() - ranAt < 2400) setTimeout(() => ctx.dirty(), 2450)
     }
