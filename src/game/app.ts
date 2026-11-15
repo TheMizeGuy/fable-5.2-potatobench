@@ -28,9 +28,9 @@ const QUIETS: Record<keyof typeof LADDERS, number[] | null> = { long: [0, 6, 3, 
 export let QUIET_S: number[] | null = QUIETS.long
 // Seconds a day takes while its only work is on the land (felling, picking rocks, cutting brush; a day with none
 // on the crop, and what is left of a day once the crop's work is done): work for people who would otherwise have
-// none, which is weeks of days in a summer. It is seen being done, ten seconds to a day, and the season stays a
+// none, which is weeks of days in a summer. It is seen being done, eight seconds to a day, and the season stays a
 // sitting (at a minute a day a summer of felling is two hours).
-const LAND_S = [0, 10, 6, 4]
+const LAND_S = [0, 8, 5, 3]
 const LAND_WORK: JobKind[] = ['fell', 'rocks', 'brush']
 // A new farm's field hands, and a season of a hand's wages (seven months at the hall's rate).
 export const START_HANDS = 2
