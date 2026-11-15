@@ -551,7 +551,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel)
         // Waiting on the crop with nothing to decide: the same key as while the soil warms. (Round ten: all three players'
         // first complaint was the waiting, "a 'skip to the next thing that needs me' button".)
-        : mine && !busy && season && !S.seasonDone(c) && app.skipBack === 0 ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-faster', title: ctx.touch() ? undefined : 'Runs the days fast until there\'s something for you to decide, then goes back to the speed you had', onclick: () => app.skipAhead() },
+        // (at a wide desk only: beside the slip on a smaller window the key took 48 px of height from a card opened
+        // under it, and a hired hand's card lost its last key there)
+        : mine && !busy && season && !S.seasonDone(c) && app.skipBack === 0 && ctx.layout() === 'wide' ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-faster', title: ctx.touch() ? undefined : 'Runs the days fast until there\'s something for you to decide, then goes back to the speed you had', onclick: () => app.skipAhead() },
           icon('fast', 'i'), 'Skip ahead')
           : null
       return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet

@@ -58,7 +58,8 @@ async function wordsOnScreen(page: Page): Promise<{ n: number; by: string }> {
       let here = 0
       for (const n of el.childNodes) if (n.nodeType === 3) here += (n.nodeValue ?? '').trim().split(/\s+/).filter(Boolean).length
       words += here
-      if (here >= 3) by.push(`${el.dataset.testid ?? el.className}: ${here}`)
+      // (each part with its first words, so a count that goes over says what was on the screen)
+      if (here >= 3) by.push(`${el.dataset.testid ?? (el.className || el.tagName.toLowerCase())}: ${here} "${(el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 48)}"`)
     }
     return { n: words, by: by.join('; ') }
   })

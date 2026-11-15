@@ -146,6 +146,8 @@ test('waiting on the crop, the slip offers Skip ahead, and the days go faster th
   test.skip(isMobile, 'the desk')
   test.setTimeout(180_000)
   const errors = watchErrors(page)
+  // (a wide desk: on a smaller window the key is offered only while the soil warms, as before)
+  await page.setViewportSize({ width: 1920, height: 1080 })
   await startSeason(page)
   // Every potato field planted, the crew's routine left on, and felling on the list so nobody stands idle.
   await reach(page, `const { app, sim } = q.g(); const c = app.campaign; app.do({ t: 'sprayWay', way: 'auto' })
