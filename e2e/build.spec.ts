@@ -92,7 +92,7 @@ test('people with nothing to do are offered work by name, and a key gives it', a
 
 // The To do sheet said "Nothing is waiting on you. Your crew is working through the work list." under a slip that said
 // "Keep your crew busy", with people standing idle: it says who has nothing to do and gives the same work.
-test('the To do sheet says who has nothing to do and gives them work, and says what is coming once', async ({ page, isMobile }) => {
+test('the To do sheet says who has nothing to do and gives them work', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the desk')
   const errors = watchErrors(page)
   await startSeason(page)
@@ -107,8 +107,6 @@ test('the To do sheet says who has nothing to do and gives them work, and says w
   const block = todo.getByTestId('todo-idle')
   await expect(block).toContainText('You have nothing to do. There is work on the land:')
   await expect(todo).not.toContainText('Your crew is working through the work list')
-  // What is coming is said under its label, without "Next up" a second time.
-  await expect(todo).not.toContainText('Next up')
   const key = todo.getByTestId('todo-free-0')
   const kind = /brush/i.test((await key.textContent())!) ? 'brush' : 'rocks'
   await key.click()
@@ -119,6 +117,25 @@ test('the To do sheet says who has nothing to do and gives them work, and says w
   await page.getByTestId('bar-todo').click()
   await expect(todo).toBeVisible()
   await expect(todo.getByTestId('todo-idle')).toHaveCount(0)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+// What is coming is said once on the To do sheet: under "Coming up", without the slip's "Next up" in front of it, and
+// not again as the next goal when the goal is the same thing.
+test('the To do sheet says what is coming once', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desk')
+  const errors = watchErrors(page)
+  await startSeason(page)
+  // Early August, the crop tended by the crew's own routine: the vine kill is the next thing, and the next goal.
+  await reach(page, `const { app } = q.g(); q.run(q.day(8, 6), ['kill', 'sell']); app.setSpeed(0); app.campaign.incidents = []; app.select(-1); app.selectUnit(-1)`)
+  await putAway(page)
+  await expect(page.getByTestId('goal')).toContainText('kill the vines')
+  await page.getByTestId('bar-todo').click()
+  const todo = page.getByTestId('todo')
+  await expect(todo).toBeVisible()
+  await expect(todo.locator('.mb-next').filter({ hasText: 'Coming up' })).toContainText('Kill the vines for harvest, due around')
+  await expect(todo).not.toContainText('Next up')
+  await expect(todo.locator('.mb-next').filter({ hasText: 'Next goal' })).toHaveCount(0)
   expect(errors, errors.join('\n')).toEqual([])
 })
 
@@ -134,11 +151,14 @@ test('at a wide desk an order on the work list names who has it', async ({ page,
     c.incidents = []; for (const j of [...c.season.jobs]) app.do({ t: 'cancel', id: j.id }); app.do({ t: 'routine', kind: 'scout', auto: false }); app.do({ t: 'routine', kind: 'hill', auto: false }); app.setSpeed(0)`)
   await putAway(page)
   await page.getByTestId('idle-do-1').click()
-  const names = await game<string[]>(page, `c.crew.map(u => u.kind === 'farmer' ? 'You' : u.name.split(' ')[0])`)
-  const mark = page.locator('#ui .queue .q-tag.named').first()
-  await expect(mark).toBeVisible({ timeout: 10_000 })
-  expect(names).toContain((await mark.textContent())!.trim())
-  await expect(page.locator('#ui .queue .q').first()).not.toHaveAttribute('title', /The ringed/)
+  // The felling order's own chip, and whoever the game says has it.
+  const id = await game<number>(page, `c.season.jobs.find(j => j.kind === 'fell').id`)
+  const chip = page.getByTestId(`queue-${id}`)
+  await expect(chip.locator('.q-tag.named')).toBeVisible({ timeout: 10_000 })
+  const whose = await game<string>(page, `(() => { const o = sim.jobOutlook(app.world, c).find(x => x.id === ${id}); const u = c.crew.find(x => x.id === o.unit); return !u ? '' : u.kind === 'farmer' ? 'You' : u.name.split(' ')[0] })()`)
+  expect(whose).not.toBe('')
+  await expect(chip.locator('.q-tag.named')).toHaveText(whose)
+  await expect(chip).not.toHaveAttribute('title', /The ringed/)
   expect(errors, errors.join('\n')).toEqual([])
 })
 

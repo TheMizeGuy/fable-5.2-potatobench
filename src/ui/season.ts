@@ -523,10 +523,12 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const c = app.campaign
     if (!c) return
     const need = app.needs()[i]?.need
-    if (need && need.act === 'sell') { openTicket(need.lot); return }
+    // (with someone picked, a right-click sends them, as on the land: the ticket is for a press with nobody in hand)
+    if (need && need.act === 'sell' && !(right && app.unit >= 0)) { openTicket(need.lot); return }
     const asked = !!c.season && !S.plantWordGiven(c.season)
     const r = right ? app.orderAt(i) : app.smartOrder(i)
-    if (r.ok) ctx.announce(`${need ? F.localize(need.text) : 'Order given.'} It's on the work list.`)
+    // (a right-click's order is said by its own answer, who was sent and to what: it may not be the field's need)
+    if (r.ok) { if (!right) ctx.announce(`${need ? F.localize(need.text) : 'Order given.'} It's on the work list.`) }
     else if (right) app.notice(r.err)
     else ctx.say(`${S.FIELD_NAMES[i]}: ${r.err}`, 'info')
     if (asked && c.season && S.plantWordGiven(c.season)) landQuietUntil = performance.now() + WORD_QUIET_MS

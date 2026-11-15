@@ -5,10 +5,10 @@ import { dayIndex, formatDay, isLeap, SUNDAY, weekday, withCommas } from './cale
 import { buildBlock, buildCost, spendBlock } from './buildings.ts'
 import { apply, held, mortgageDue, openLots, planCosts, sprayWayNow, stumpBlock, tileBlock } from './campaign.ts'
 import { HOME_YARD, PARCELS, TRACTS } from './farm.ts'
-import { basePrice, gradePrice, harvestPrice, lotValue } from './market.ts'
+import { basePrice, gradePrice, harvestPrice, levelNow, lotValue } from './market.ts'
 import { lotCwt, markOdds, skinAt, skinnedShare } from './harvest.ts'
 import * as P from './params.ts'
-import { housingLimit, hiredCount, hurt, jobSkill, payOf, resting, SKILL_LABEL, subject, willDo } from './people.ts'
+import { housingLimit, hiredCount, hurt, jobSkill, payOf, resting, SKILL_LABEL, speed, subject, willDo } from './people.ts'
 import { FIELD_NAMES, JOB_LABEL, jobCost, placeName, pressingWhy, seasonDone, standingBy, tractorsRunning, waitFor, workday } from './season.ts'
 import { asks, killByItself } from './advice.ts'
 import { H_ROGUED, type BuildingKind, type Campaign, type Cmd, type Job, type JobKind, type KillWhy, type Unit, type UpgradeId, type VarietyId, type World, type YearSummary } from './types.ts'
@@ -243,23 +243,43 @@ function wagesAhead(c: Campaign): number {
   return out
 }
 
-// The marketable crop the farm looks like having to store this season, cwt: the lots in hand, and for each field
-// not yet weighed its expected yield (harvestYield) at the usual marketable share. For setting the crop against what
-// the potato houses hold.
+// The crop the farm looks like having to store this season, cwt by weight: the lots in hand; a field dug and not
+// yet weighed, at what its lot holds; and each field still to be dug at its expected yield (harvestYield), the part
+// that is its own showing at STORED_SHARE and the part still its variety's usual yield at USUAL_STORED. A field not
+// planted by PLANT_LAST is left out. For setting the crop against what the potato houses hold.
 export function cropAhead(c: Campaign): number {
   const s = c.season
   if (c.phase !== 'season' || !s) return 0
   let cwt = 0
   for (const l of openLots(c)) cwt += lotCwt(l)
+  const late = s.day > dayIndex(s.year, P.PLANT_LAST.month, P.PLANT_LAST.dom)
   for (let i = 0; i < P.FIELD_COUNT; i++) {
     const f = s.fields[i]
     if (f.weighed) continue
-    const toPlant = f.status === 'idle' && c.plans[i]?.crop === 'potato'
-    if (!toPlant && f.status !== 'planted' && f.status !== 'growing' && f.status !== 'dead' && f.status !== 'digging' && f.status !== 'dug') continue
+    if (f.status === 'dug') { const lot = c.lots.find(l => l.id === f.lotId); if (lot && !lot.open) cwt += lotCwt(lot); continue }
+    const toPlant = f.status === 'idle' && c.plans[i]?.crop === 'potato' && !late
+    if (!toPlant && f.status !== 'planted' && f.status !== 'growing' && f.status !== 'dead' && f.status !== 'digging') continue
     const e = harvestYield(c, i)
-    if (e) cwt += e.mean * P.FIELD_ACRES * P.MARKETABLE_SHARE
+    if (e) cwt += ((e.mean - e.prior) * P.STORED_SHARE + e.prior * P.USUAL_STORED) * P.FIELD_ACRES
   }
   return cwt
+}
+
+// What a winter of the farmer's own packing looks like adding, dollars: the hundredweight one person packs in the
+// winter months still to come but the last (campaign.ts, winterWork: what is packed after the last sale brings
+// nothing) at the packed No. 1 premium over a winter's price, less the packing charge. The price is the variety's own over the winter months at the level known so far, not today's: in summer
+// today's is the new-potato price, and a figure from it read about twice what packing paid.
+export function packOutlook(world: World, c: Campaign, id: VarietyId): number {
+  const farmer = c.crew.find(u => u.kind === 'farmer')
+  if (!farmer) return 0
+  const v = variety(id)
+  let curve = 0
+  for (let m = 0; m < P.WINTER_MONTHS; m++) curve += P.MONTH_CURVE[Math.min(m, P.MONTH_CURVE.length - 1)]
+  // (in spring the year's price level is not yet known to the player)
+  const price = v.contract ? basePrice(world, c, id) : v.price * (curve / P.WINTER_MONTHS) * (c.phase === 'plan' ? 1 : levelNow(world, c))
+  const months = Math.max(0, P.WINTER_MONTHS - 1 - (c.phase === 'cellar' ? c.month : 0))
+  const cwt = P.FARMER_WINTER_DAYS * speed(farmer, 'pack') * P.PACK_PER_DAY * months
+  return Math.max(0, cwt * (P.PACK_NO1 * price - P.PACK_CHARGE))
 }
 
 // The farm stand's takings still to come this season over what the same potatoes fetch at the market's price
@@ -751,7 +771,8 @@ export function moneyWatch(w: MoneyWatch | null, now: MoneyLook): { cause: Money
 // the vines are expected to come off (killOutlook). Counted in days from the tubers setting, not by the warmth so far,
 // and slow at first as bulking is (x^1.5 (1 - x) + x^2 of it done at x of the days), so the figure neither falls when the
 // tubers set nor slides through July and climbs back by September.
-export function harvestYield(c: Campaign, field: number): { mean: number; lo: number; hi: number } | null {
+// prior: the part of mean that is still the variety's usual yield, not this field's own showing.
+export function harvestYield(c: Campaign, field: number): { mean: number; lo: number; hi: number; prior: number } | null {
   const f = c.season!.fields[field]
   const usual = usualYield(c, field, f.variety)
   const e = estimateYield(c, field)
@@ -767,6 +788,7 @@ export function harvestYield(c: Campaign, field: number): { mean: number; lo: nu
   const more = toCome * usual
   return {
     mean: (e?.mean ?? 0) + more,
+    prior: more,
     lo: (e?.lo ?? 0) + more * (1 - 1.5 * P.USUAL_SPREAD),
     hi: (e?.hi ?? 0) + more * (1 + 1.5 * P.USUAL_SPREAD),
   }

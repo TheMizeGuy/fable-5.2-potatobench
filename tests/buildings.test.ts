@@ -212,19 +212,69 @@ describe('the potato house', () => {
 
 describe('the crop against the cellar', () => {
   // The build menu sets this figure beside what the potato houses hold, so a second house's worth can be judged.
-  it('the crop the farm looks like storing is within a fifth of what comes to the weigh-in, and more than the home cellar in a first year', () => {
-    for (const seed of [1, 3, 7]) {
+  it('the crop the farm looks like storing stays near what comes to the weigh-in all season, and nearer once the vines are killed', () => {
+    for (const seed of [1, 2, 3, 5, 7, 11]) {
       const c = S.createCampaign(world, { seed, startYear: 1987 })
       expect(S.cropAhead(c), 'in spring there is no season to forecast').toBe(0)
       ok(c, { t: 'begin' })
-      const ahead = S.cropAhead(c)
-      expect(ahead).toBeGreaterThan(S.cellarCapacity(c))
-      tend(c, x => S.seasonDone(x))
+      expect(S.cropAhead(c)).toBeGreaterThan(S.cellarCapacity(c))
+      const seen: { v: number; killed: boolean }[] = []
+      tend(c, x => { seen.push({ v: S.cropAhead(x), killed: x.season!.fields.some(f => f.deadDay >= 0) }); return S.seasonDone(x) })
       const weighed = c.lots.filter(l => l.year === c.year).reduce((sum, l) => sum + S.lotCwt(l), 0)
-      expect(weighed / ahead, `seed ${seed}: ${Math.round(ahead)} forecast, ${Math.round(weighed)} weighed`).toBeGreaterThan(0.8)
-      expect(weighed / ahead).toBeLessThan(1.2)
+      for (const [k, x] of seen.entries()) {
+        const r = x.v / weighed
+        // (a field being dug with its lot not yet open, or dug and not yet weighed, counted twice or not at all,
+        // would leave these bounds; so would a price share used for a weight)
+        expect(r, `seed ${seed}, look ${k}: ${Math.round(x.v)} forecast, ${Math.round(weighed)} weighed`).toBeGreaterThan(x.killed ? 0.92 : 0.88)
+        expect(r, `seed ${seed}, look ${k}`).toBeLessThan(x.killed ? 1.12 : 1.3)
+        if (k > 0) expect(Math.abs(x.v - seen[k - 1].v) / weighed, `seed ${seed}: the figure's move from look ${k - 1} to ${k}`).toBeLessThan(0.12)
+      }
       // With every field weighed, it is what is in the lots in hand.
       expect(S.cropAhead(c)).toBeCloseTo(S.storageInfo(c).stored, 3)
+    }
+  })
+
+  it('a potato field not planted by July is no longer counted', () => {
+    const c = S.createCampaign(world, { seed: 1, startYear: 1987 })
+    ok(c, { t: 'begin' })
+    expect(S.cropAhead(c)).toBeGreaterThan(0)
+    // The same farm with nothing planted and the calendar past the day: no crop is forecast.
+    const late = structuredClone(c)
+    late.season!.day = S.dayIndex(c.year, S.PLANT_LAST.month, S.PLANT_LAST.dom) + 1
+    expect(late.season!.fields.some((f, i) => f.status === 'idle' && late.plans[i]?.crop === 'potato')).toBe(true)
+    expect(S.cropAhead(late)).toBe(0)
+  })
+})
+
+describe('what packing looks like adding', () => {
+  // The build menu's line for the packing shed. It was priced at today's price, which in summer is the new-potato
+  // price: about twice what a winter of packing paid.
+  it('is priced at a winter\'s prices, not the summer\'s, and is near what a winter of the farmer\'s packing brings', () => {
+    for (const seed of [1, 3, 7]) {
+      const play = (pack: boolean) => {
+        const c = spring(1987, seed)
+        const inSpring = S.packOutlook(world, c, 'katahdin')
+        ok(c, { t: 'build', kind: 'packing', yard: HOME })
+        ok(c, { t: 'begin' })
+        let july = 0
+        tend(c, x => { if (x.season!.day === S.dayIndex(x.year, 7, 15)) july = S.packOutlook(world, x, 'katahdin'); return S.seasonDone(x) })
+        expect(S.hasBuilt(c, 'packing', HOME)).toBe(true)
+        ok(c, { t: 'endSeason' })
+        const inCellar = S.packOutlook(world, c, 'katahdin')
+        if (pack) ok(c, { t: 'winter', unit: c.crew[0].id, work: 'pack' })
+        for (let k = 0; k < 12 && c.phase === 'cellar'; k++) {
+          if (c.month >= S.WINTER_MONTHS - 1) for (const l of S.openLots(c)) ok(c, { t: 'sell', lot: l.id, frac: 1 })
+          ok(c, { t: 'month' })
+        }
+        return { cash: c.cash, inSpring, july, inCellar }
+      }
+      const packed = play(true), not = play(false)
+      const gain = packed.cash - not.cash
+      expect(gain, `seed ${seed}`).toBeGreaterThan(1000)
+      expect(packed.july / packed.inSpring, 'July\'s figure is spring\'s: neither rides the summer price').toBeGreaterThan(0.85)
+      expect(packed.july / packed.inSpring).toBeLessThan(1.15)
+      expect(packed.inCellar / gain, `seed ${seed}: ${Math.round(packed.inCellar)} said in November, ${Math.round(gain)} gained`).toBeGreaterThan(0.9)
+      expect(packed.inCellar / gain).toBeLessThan(1.4)
     }
   })
 })

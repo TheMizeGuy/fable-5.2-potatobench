@@ -59,10 +59,12 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
   // (PACK_PER_DAY a day for FARMER_WINTER_DAYS a month, PACK_NO1 over the price less the packing charge).
   const crop = c.phase === 'season' && c.season ? Math.round(S.cropAhead(c) / 100) * 100 : 0
   const holds = S.cellarCapacity(c)
-  const storing = crop <= 0 ? '' : crop > holds ? `Your crop looks like ${F.mass(crop)} and you can store ${F.mass(holds)}: ${F.mass(crop - holds)} would sell at harvest`
+  // (not while a second house is going up: what the farm can store is about to change)
+  const going = c.buildings.some(b => b.kind === 'house' && !b.built)
+  const storing = crop <= 0 || going ? '' : crop > holds ? `Your crop looks like ${F.mass(crop)} and you can store ${F.mass(holds)}: ${F.mass(crop - holds)} would sell at harvest`
     : `You can already store this year's crop (about ${F.mass(crop)} of ${F.mass(holds)})`
-  const packs = grown ? Math.round(S.FARMER_WINTER_DAYS * S.PACK_PER_DAY * S.WINTER_MONTHS * (S.PACK_NO1 * S.basePrice(app.world, c, grown) - S.PACK_CHARGE) / 100) * 100 : 0
-  const own: Partial<Record<S.BuildingKind, string>> = { house: storing, packing: packs > 0 ? `Packing all winter yourself adds up to about ${F.money(packs)}` : '' }
+  const packs = grown ? Math.round(S.packOutlook(app.world, c, grown) / 100) * 100 : 0
+  const own: Partial<Record<S.BuildingKind, string>> = { house: storing, packing: packs > 0 ? `Packing all winter yourself adds up to about ${F.money(packs)} at a usual winter's prices` : '' }
   const buildings: Item[] = S.buildingInfo(c).filter(b => b.yard === S.HOME_YARD).map(b => {
     const mats = [b.logs > 0 ? `${loads(b.logs)} logs` : '', b.stone > 0 ? `${loads(b.stone)} stone` : ''].filter(Boolean).join(' and ')
     const bought = b.buyLogs > 0 || b.buyStone > 0

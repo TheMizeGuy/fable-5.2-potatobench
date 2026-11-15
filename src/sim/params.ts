@@ -442,6 +442,13 @@ export const DIG_FROST_MARGIN = 1
 // B size and culls of a crop clear of scab and knobs, less this much for each share of tubers the field's season and
 // soil send to No. 2 (harvest.ts, markOdds), and how far a field strays from that (fitted over 192 coach-tended fields).
 export const MARKETABLE_SHARE = 0.86
+// By weight, for setting the crop against the cellar: the share of a field's own expected yield that comes to the
+// weigh-in (all but the culls: 0.940 to 0.951 over eight first-year farms), and before a field has shown its own, the
+// share of its variety's usual yield a tended crop has brought there (0.82 to 0.89 over the same farms).
+export const STORED_SHARE = 0.95
+export const USUAL_STORED = 0.86
+// The last day a potato field still to be planted is reckoned to make a crop.
+export const PLANT_LAST = { month: 7, dom: 1 }
 export const MARKETABLE_NO2 = 0.38
 export const MARKETABLE_SPREAD = 0.042
 // Before the tubers set: the share of tubers a usual season sends to No. 2, and how far a field's yield strays from
