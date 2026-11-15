@@ -110,3 +110,16 @@ screen's slip, idle keys and a test dig's toast as three things with none first;
 owed; the build menu's sentences. Done from that in `live-64`, not re-marked: at the word to plant the one key
 stands alone; a build row is its name, its effect, its time and its price, with the sentence on its slip; and a row
 says "Goes on your loan" or "Paid from your cash" with the year-end forecast it leaves.
+
+## Sixth pass, on `live-65`
+
+| | first screen | later | build menu |
+|---|---|---|---|
+| strategy player | 8 | 6 | 7 |
+| casual player | 8 | 5 | 7 |
+
+The first screen is at 8 from both for the first time (one tip, one key). The later screen is unchanged: the slip,
+the idle keys under it and a toast still read as separate things, and neither viewer could say whether the second
+money figure is cash or debt. Done from that in `live-66`, not re-marked: the slip and the idle keys are one canary
+card with the fist; the second figure is "Year-end cash"; a build row's materials are "included in the price".
+Not done: what a building earns back, said in money; the test dig's toast folded into the card.

@@ -954,7 +954,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       }
       // (not the slip for idle people, which comes and goes as orders are given: it never moves the land)
       const idleRow = top.el.querySelector<HTMLElement>('.idle-row')
-      const idleTall = idleRow && idleRow.offsetParent !== null ? toScreen(idleRow.offsetHeight + 5) : 0
+      // (what it adds under the slip it hangs from, measured, so no margin of its own is counted wrong)
+      const hungFrom = idleRow?.previousElementSibling
+      const idleTall = idleRow && idleRow.offsetParent !== null ? Math.max(0, idleRow.getBoundingClientRect().bottom - (hungFrom ? hungFrom.getBoundingClientRect().bottom : idleRow.getBoundingClientRect().top)) : 0
       const t = Math.max(top.el.getBoundingClientRect().bottom - idleTall, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
       board = Math.max(0, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
       const vis = (x: HTMLElement) => !x.hidden && x.offsetParent !== null && x.offsetHeight > 0
