@@ -614,7 +614,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     for (const x of top.el.querySelectorAll<HTMLElement>('.goal, .idle-row, .tb-pop')) {
       if (x.offsetParent === null || !x.offsetHeight) continue
       const r = x.getBoundingClientRect()
-      const wide = hung && hung.width > 0 && (x.classList.contains('goal') || x.classList.contains('idle-row'))
+      const wide = hung && hung.width > 0 && x.classList.contains('goal')
       blocks.push({ left: wide ? Math.min(r.left, hung.left) : r.left, top: r.top, right: wide ? Math.max(r.right, hung.right) : r.right, bottom: r.bottom })
     }
     // At a desk the two boards are things to keep off as well: between them, and beside the shorter one, the land
@@ -851,6 +851,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const personUp = many && app.unit >= 0 && app.unitFrom === 'list' && !app.selection.length && app.yard === 0
     const selected = app.selection.length > 0 || app.yard !== 0
     el.classList.toggle('selected', selected)
+    el.classList.toggle('card-up', selected || app.unit >= 0)
     el.classList.toggle('person-up', personUp || grid.isOpen())
     el.classList.toggle('tray-up', !!tray)
     // What the goal points at: the field it lights, the yard it rings.
@@ -937,7 +938,10 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         for (let e: HTMLElement | null = x; e && e !== el; e = e.offsetParent as HTMLElement | null) { l += e.offsetLeft; t0 += e.offsetTop }
         return { left: toScreen(l), top: toScreen(t0), right: toScreen(l + x.offsetWidth), bottom: toScreen(t0 + x.offsetHeight) }
       }
-      const t = Math.max(top.el.getBoundingClientRect().bottom, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
+      // (not the slip for idle people, which comes and goes as orders are given: it never moves the land)
+      const idleRow = top.el.querySelector<HTMLElement>('.idle-row')
+      const idleTall = idleRow && idleRow.offsetParent !== null ? toScreen(idleRow.offsetHeight + 5) : 0
+      const t = Math.max(top.el.getBoundingClientRect().bottom - idleTall, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
       board = Math.max(0, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
       const vis = (x: HTMLElement) => !x.hidden && x.offsetParent !== null && x.offsetHeight > 0
       // The time book and its list at the foot, and the clock with them on a phone. Not the alerts: they come and go,

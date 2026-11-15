@@ -94,15 +94,13 @@
 .topbar .goal.later { --w-side: var(--card); grid-template-columns: 1fr auto; background-color: var(--paper); }
 .topbar .goal.later .goal-t { font-weight: 400; font-style: italic; }
 .topbar .goal-row .goal { flex: 0 1 auto; }
-/* People with nothing to do: the strong slip while there are any (canary, with the fist), under the crop's line: who
-   they are and the work they can be given, each job a key that names itself. As wide as the board it hangs from. */
-.topbar .idle-row { width: 0; min-width: calc(100% - 18px); margin: 6px 0 0 18px; padding: 8px 10px 9px; display: grid; gap: 6px; background: var(--canary) url(img/grain.png); background-blend-mode: multiply; box-shadow: var(--laid); pointer-events: auto; }
-.topbar .idle-say { margin: 0; display: flex; align-items: center; gap: 8px; font: 400 15px/1.2 var(--f-text); }
-.topbar .idle-say b { font: 700 17px/1.1 var(--f-text); }
-.topbar .idle-say .fist { --i: 26px; flex: none; }
-.topbar .idle-keys { display: flex; flex-wrap: wrap; gap: 6px; }
-.topbar .idle-key { min-height: 36px; padding: 0 10px 2px; gap: 6px; font-size: 15px; white-space: nowrap; }
-.topbar .idle-key .i { --i: 18px; }
+/* People with nothing to do: one line on canary under the goal: who, and each job they can be given as a key that
+   names it. As wide as its words. It steps down while a card is open (the card has the land's room then). */
+.topbar .idle-row { width: max-content; max-width: calc(100% - 18px); margin: 5px 0 0 18px; padding: 5px 8px 6px 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; background: var(--canary) url(img/grain.png); background-blend-mode: multiply; box-shadow: var(--laid); pointer-events: auto; }
+.topbar .idle-say { font: 700 15px/1.1 var(--f-text); white-space: nowrap; }
+.topbar .idle-key { min-height: 32px; padding: 0 9px 2px; gap: 5px; font-size: 14px; white-space: nowrap; }
+.topbar .idle-key .i { --i: 16px; }
+.season-screen.card-up .topbar .idle-row { display: none; }
 .topbar[data-layout='narrow'] .idle-row, .topbar[data-layout='short'] .idle-row { display: none; }
 .topbar .goal-go { padding: 0 12px 3px; margin-top: 6px; font-size: 15px; gap: 6px; }
 .topbar[data-layout='narrow'] .goal-go, .topbar[data-layout='short'] .goal-go { min-height: var(--touch); margin: 4px 0 0 12px; }

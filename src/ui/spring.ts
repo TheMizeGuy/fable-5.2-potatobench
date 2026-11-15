@@ -311,7 +311,7 @@ export function tractCard(ctx: Ctx, c: S.Campaign, field: number, note: string, 
 
 // ---------------------------------------------------------------- equipment
 
-function equipNeeds(c: S.Campaign, id: S.UpgradeId): string {
+export function equipNeeds(c: S.Campaign, id: S.UpgradeId): string {
   const u = S.UPGRADES[id]
   if ((id === 'tractor2' || id === 'tractor3') && !S.hasBuilt(c, 'shed')) return 'Build the machine shed first.'
   if (id === 'tractor3' && !c.upgrades.tractor2) return 'Buy the second tractor first.'

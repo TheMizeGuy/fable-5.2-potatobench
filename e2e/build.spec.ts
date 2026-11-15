@@ -53,10 +53,15 @@ test('people with nothing to do are offered work by name, and a key gives it', a
   await putAway(page)
   const idle = page.getByTestId('idle')
   await expect(idle).toBeVisible({ timeout: 10_000 })
-  await expect(idle).toContainText('You are idle. Give them work:')
-  // Each job is a key that says what it is and where; and Build is beside them.
-  await expect(page.getByTestId('idle-do-0')).toHaveText(/^(Cut brush|Pick rocks): .+/)
-  await expect(page.getByTestId('idle-build')).toHaveText('Build…')
+  await expect(idle).toContainText('You are idle')
+  // Each job is a key that says what it is, and names its place to a reader and on its slip.
+  await expect(page.getByTestId('idle-do-0')).toHaveText(/^(Cut brush|Pick rocks)$/)
+  await expect(page.getByTestId('idle-do-0')).toHaveAttribute('aria-label', /^(Cut brush|Pick rocks): .+/)
+  await expect(page.getByTestId('idle-do-1')).toHaveText('Cut trees')
+  // It is one line under the goal, no wider than the board it hangs from.
+  const row = (await idle.boundingBox())!, board = (await page.locator('#ui .topbar .almanac > .mount').boundingBox())!
+  expect(row.height).toBeLessThan(52)
+  expect(row.x + row.width).toBeLessThanOrEqual(board.x + board.width + 1)
   const said = (await page.getByTestId('idle-do-0').textContent())!
   const kind = /^Cut brush/.test(said) ? 'brush' : 'rocks'
   await page.getByTestId('idle-do-0').click()
@@ -64,7 +69,13 @@ test('people with nothing to do are offered work by name, and a key gives it', a
   await expect(idle).toHaveCount(0)
   // The slip never says there is nothing to do.
   await expect(page.getByTestId('goal')).not.toContainText(/nothing to do/i)
-  await page.getByTestId('goal').click()
+  // And it steps down while a card is open.
+  await reach(page, `const { app } = q.g(); for (const j of [...app.campaign.season.jobs]) app.do({ t: 'cancel', id: j.id })`)
+  await putAway(page)
+  await expect(idle).toBeVisible()
+  await page.getByTestId('field-0').click()
+  await expect(page.getByTestId('card')).toBeVisible()
+  await expect(idle).toBeHidden()
   expect(errors, errors.join('\n')).toEqual([])
 })
 
@@ -76,7 +87,7 @@ test('seen from near, a person wears their name over their head and no face cove
   await reach(page, `const { app } = q.g(); app.campaign.cash += 9000; app.do({ t: 'hire', kind: 'hand' }); app.do({ t: 'day' }); app.setSpeed(0); app.select(-1); app.selectUnit(-1)`)
   await putAway(page)
   // From the farm's own view a person is a face pin.
-  type Hooks = { __countyField: { follow(id: number): void; unitPin(id: number): { x: number; y: number; visible: boolean }; unitFoot(id: number): { x: number; y: number }; rig: { moving(): boolean } } }
+  type Hooks = { __countyField: { unitPin(id: number): { x: number; y: number; visible: boolean }; unitFoot(id: number): { x: number; y: number }; rig: { moving(): boolean } } }
   const seen = () => page.evaluate(() => {
     const F = (globalThis as unknown as Hooks).__countyField
     const w = document.querySelector<HTMLElement>('#ui .plate-layer [data-testid="pin-1"]')?.closest<HTMLElement>('.pin-at')
@@ -84,8 +95,10 @@ test('seen from near, a person wears their name over their head and no face cove
     const tip = F.unitPin(1), foot = F.unitFoot(1)
     return { near: !!w?.classList.contains('near'), gone: !w || w.classList.contains('gone'), head: box(w?.querySelector('.head')), name: box(w?.querySelector('.name')), said: w?.querySelector('.name')?.textContent ?? '', tip, foot, tall: foot.y - tip.y }
   })
-  // Brought near (the camera follows them in until they stand well over a hundred pixels tall).
-  await page.evaluate(() => (globalThis as unknown as Hooks).__countyField.follow(1))
+  // Brought near: their row of the People sheet takes the camera to them.
+  await page.getByTestId('bar-people').click()
+  await page.getByTestId('people-go-1').click()
+  await page.waitForTimeout(600)
   await page.waitForFunction(() => !(globalThis as unknown as Hooks).__countyField.rig.moving(), null, { timeout: 15_000 })
   await reach(page, `q.g().app.selectUnit(-1)`)
   await page.waitForTimeout(900)

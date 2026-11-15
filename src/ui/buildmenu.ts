@@ -9,6 +9,7 @@ import { h } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { BUILD_GLYPH } from './rules.ts'
+import { equipNeeds } from './spring.ts'
 import './buildmenu.css'
 
 type State = 'can' | 'no' | 'have' | 'doing'
@@ -17,12 +18,11 @@ interface Item { id: string; glyph: string; name: string; does: string; price: s
 
 const UPGRADE_GLYPH: Record<S.UpgradeId, string> = { boom: 'spray', harvester: 'dig', vent: 'store', reel: 'water', tractor2: 'machine', house2: 'store', tractor3: 'machine', truck: 'haul' }
 // What a machine's purchase waits on, said as the thing to do first.
-const first = (why: string): string => /machine shed/i.test(why) ? 'Needs the machine shed' : /second tractor first/i.test(why) ? 'Needs the second tractor' : /can't afford|costs \$/i.test(why) ? 'Not enough money yet' : why.replace(/\.$/, '')
+const first = (why: string): string => /machine shed/i.test(why) ? 'Needs the machine shed' : /second tractor first/i.test(why) ? 'Needs the second tractor' : /can't afford|costs \$|You need \$/i.test(why) ? 'Not enough money yet' : why.replace(/\.$/, '')
 
 function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => void): { title: string; note: string; list: Item[] }[] {
   const app = ctx.app
   const run = (cmd: S.Cmd) => { const r = ctx.run(cmd); done(r.ok ? F.localize(r.events[0]?.text ?? 'Done.') : F.localize(r.err), r.ok) }
-  const costs = S.goalCosts(c)
   const loads = (n: number) => F.num(Math.ceil(n))
   const buildings: Item[] = S.buildingInfo(c).filter(b => b.yard === S.HOME_YARD).map(b => {
     const mats = [b.logs > 0 ? `${loads(b.logs)} logs` : '', b.stone > 0 ? `${loads(b.stone)} stone` : ''].filter(Boolean).join(' and ')
@@ -39,11 +39,12 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
     }
   })
   const machines: Item[] = (Object.keys(S.UPGRADES) as S.UpgradeId[]).map(id => {
-    const u = S.UPGRADES[id], g = costs.find(x => x.id === `buy:${id}`)
+    const u = S.UPGRADES[id]
     const have = !!c.upgrades[id]
+    const why = have ? '' : equipNeeds(c, id)
     return {
-      id: `buy-${id}`, glyph: UPGRADE_GLYPH[id], name: u.name, does: u.blurb, price: F.money(u.cost), cost: u.cost,
-      state: have ? 'have' : g?.can ? 'can' : 'no', why: have ? 'Owned' : g?.can ? '' : first(g?.why ?? ''),
+      id: `buy-${id}`, glyph: UPGRADE_GLYPH[id], name: u.name, does: u.blurb.replace(/ You need the machine shed[^.]*\./, ''), price: F.money(u.cost), cost: u.cost,
+      state: have ? 'have' : why ? 'no' : 'can', why: have ? 'Owned' : why ? first(why) : '',
       label: 'Buy', run: () => run({ t: 'buy', upgrade: id }),
     }
   })

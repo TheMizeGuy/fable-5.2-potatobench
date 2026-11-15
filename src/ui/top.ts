@@ -455,16 +455,17 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const idle = c.phase === 'season' ? idleWork(c) : null
     if (!idle) return null
     const one = c.crew.find(u => u.id === idle.who[0])
-    const who = idle.who.length === c.crew.length && c.crew.length > 1 ? 'Everyone is idle.' : idle.who.length === 1 && one ? (one.kind === 'farmer' ? 'You are idle.' : `${firstName(one.name)} is idle.`) : `${idle.who.length} people are idle.`
+    const who = idle.who.length === c.crew.length && c.crew.length > 1 ? 'Everyone is idle' : idle.who.length === 1 && one ? (one.kind === 'farmer' ? 'You are idle' : `${firstName(one.name)} is idle`) : `${idle.who.length} people idle`
+    // (one line: who, and each job as a key that names it; its place is on the key's slip, lit on the land under the
+    // pointer, and said when the order is given)
     return h('div', { class: 'idle-row', testid: 'idle', role: 'group', 'aria-label': 'People with nothing to do' },
-      h('p', { class: 'idle-say' }, fist(), h('b', null, who), h('span', { class: 'sr' }, ' Give them work:')),
-      h('div', { class: 'idle-keys' },
-        idle.options.map((w, k) => h('button', {
-          class: 'btn idle-key', type: 'button', testid: `idle-do-${k}`, 'data-kind': w.kind, title: ctx.touch() ? undefined : `${w.gain} Work on the crop comes first: anyone needed there leaves this for it.`,
-          onclick: () => giveFree(w),
-          onpointerenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') app.setHover(w.field) }, onpointerleave: () => { if (app.hover === w.field) app.setHover(-1) },
-        }, icon(w.kind, 'i'), `${w.kind === 'fell' ? 'Cut trees' : JOB_VERB[w.kind]}: ${S.FIELD_NAMES[w.field]}`)),
-        o.onBuild ? h('button', { class: 'btn idle-key', type: 'button', testid: 'idle-build', onclick: () => o.onBuild!() }, icon('hammer', 'i'), 'Build…') : null))
+      h('b', { class: 'idle-say' }, who),
+      idle.options.map((w, k) => h('button', {
+        class: 'btn idle-key', type: 'button', testid: `idle-do-${k}`, 'data-kind': w.kind, 'aria-label': `${w.kind === 'fell' ? 'Cut trees' : JOB_VERB[w.kind]}: ${S.FIELD_NAMES[w.field]}`,
+        title: ctx.touch() ? undefined : `${S.FIELD_NAMES[w.field]}. ${w.gain} Work on the crop comes first: anyone needed there leaves this for it.`,
+        onclick: () => giveFree(w),
+        onpointerenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') app.setHover(w.field) }, onpointerleave: () => { if (app.hover === w.field) app.setHover(-1) },
+      }, icon(w.kind, 'i'), w.kind === 'fell' ? 'Cut trees' : JOB_VERB[w.kind])))
   }
 
   // Why a goal is not the fist's to point at now, in a few words.

@@ -22,6 +22,7 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
   const app = ctx.app
   const wraps = new Map<number, HTMLElement>()
   let models: Model[] = []
+  const wasNear = new Set<number>()
   let many = false
   // The pin whose people are shown in a list, and where.
   let open = -1
@@ -147,7 +148,8 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
       // the face gives way to their name alone, and at every range the pin stands clear above the head.
       const foot = ctx.view.unitFoot(m.id)
       const tall = s0.members.length === 1 && Number.isFinite(foot.y) ? Math.max(0, foot.y - s0.y) : 0
-      const near = tall > toScreen(NEAR_TALL)
+      const near = tall > toScreen(wasNear.has(m.id) ? NEAR_TALL - 6 : NEAR_TALL)
+      if (near) wasNear.add(m.id); else wasNear.delete(m.id)
       const lift = Math.min(tall * 0.12, toScreen(26))
       draw(w, m, s0.members.length, s0.members, near)
       w.classList.toggle('near', near)

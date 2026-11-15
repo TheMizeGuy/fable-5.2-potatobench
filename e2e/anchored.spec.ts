@@ -938,7 +938,7 @@ async function yardHolds(page: Page, label: string): Promise<void> {
       rect: A.box(el),
       // a row whose words are taller than its box, run out of it, or run under the key's lower edge (8 px of it)
       rows: rows.filter(r => r.scrollHeight > r.clientHeight + 1 || [...r.querySelectorAll('.name, .cost, .catch')].some(x => { const b = x.getBoundingClientRect(), rb = r.getBoundingClientRect(); return b.height > 0 && (b.bottom > rb.bottom - 7.5 || b.top < rb.top - 0.5) })).map(r => r.dataset.testid),
-      said: rows.filter(r => /bank won't lend/.test(r.textContent)).length,
+      said: rows.filter(r => /bank won't lend|the bank lends until/.test(r.textContent)).length,
       once: el.querySelectorAll('[data-testid="yard-short"]').length,
       head: inWin(cr) && inWin(title.getBoundingClientRect()) && !!hit && close.contains(hit),
       note: note ? A.box(note) : null,
@@ -948,7 +948,9 @@ async function yardHolds(page: Page, label: string): Promise<void> {
     }`)
   expect.soft(seen.rows, `${label}: no row of the yard's card has words taller than its box`).toEqual([])
   expect.soft(seen.said, `${label}: no row repeats why the bank will not pay`).toBe(0)
-  expect.soft(seen.once, `${label}: what the yard is short of is said once, at the head`).toBe(1)
+  // (since 14 November the bank lends for buildings in the season: a first-year farm is short of nothing here, and
+  // where a farm is, it is said once)
+  expect.soft(seen.once, `${label}: what the yard is short of is said at most once, at the head`).toBeLessThanOrEqual(1)
   expect.soft(seen.head, `${label}: its name and its cross are in view, and the cross can be pressed`).toBe(true)
   expect.soft(seen.rect.left >= -0.5 && seen.rect.top >= -0.5 && seen.rect.right <= size.width + 0.5 && seen.rect.bottom <= size.height + 0.5, `${label}: the card lies inside the window (${JSON.stringify(seen.rect)})`).toBe(true)
   expect.soft(seen.note, `${label}: the tutorial's note is up`).not.toBeNull()

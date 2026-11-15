@@ -67,7 +67,7 @@ export function yardCard(ctx: Ctx): YardCard {
     const flash = flashed && performance.now() < flashed.until ? flashed : null
     // What cannot be paid for is said once for the yard, not on every row: each row keeps its own figures and a
     // short state.
-    const poor = (b: S.BuildingInfo) => !b.ok && b.total > c.cash && /^You can't afford/.test(b.why)
+    const poor = (b: S.BuildingInfo) => !b.ok && b.total > S.spendable(c) && /^You can't afford/.test(b.why)
     const short = can.filter(poor)
     const bought = short.some(b => b.buyLogs > 0 || b.buyStone > 0)
     const head = h('header', { class: 'command-head' },
@@ -97,7 +97,8 @@ export function yardCard(ctx: Ctx): YardCard {
           onclick: () => { const r = ctx.run({ t: 'sellLogs', loads: Math.floor(m.logs) }); if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? '')) },
         })) : null,
       short.length ? h('p', { class: 'note yard-short c-red', testid: 'yard-short' },
-        `${c.cash >= 1 ? `You have ${F.money(Math.floor(c.cash))} to build with` : 'You have no cash to build with'}, and the bank won't lend for buildings.${bought ? ' Logs and stone your yard is short of have to be bought.' : ''}`) : null,
+        c.phase === 'plan' ? `${c.cash >= 1 ? `You have ${F.money(Math.floor(c.cash))} to build with` : 'You have no cash to build with'}, and in spring the bank won't lend for buildings.${bought ? ' Logs and stone your yard is short of have to be bought.' : ''}`
+          : `You can spend ${F.money(Math.floor(S.spendable(c)))} more: the bank lends until you owe ${F.money(S.BUILD_CREDIT)}.${bought ? ' Logs and stone your yard is short of have to be bought.' : ''}`) : null,
       can.length ? h('div', { class: 'orders', role: 'group', 'aria-label': 'Put up a building' },
         can.map((b, k) => order({
           key: keys && k < 9 ? String(k + 1) : '', icon: '', name: b.name, cost: costOf(b), suggested: b.kind === best, testid: `build-${b.kind}`,
