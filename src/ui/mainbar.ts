@@ -70,7 +70,7 @@ export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Camp
           // People with nothing to do, and the work they can be given: the sheet said "nothing is waiting on you, your
           // crew is working through the work list" under a slip that said "Keep your crew busy" with two of three idle.
           idle ? h('div', { class: 'mb-idle', testid: 'todo-idle' },
-            h('p', { class: 'mb-none' }, `${idleNames} ${idle.who.length === 1 && !idleNames.startsWith('You') ? 'has' : 'have'} nothing to do. Give ${idle.who.length === 1 ? (idleNames.startsWith('You') ? 'yourself' : 'them') : 'them'} work on the land:`),
+            h('p', { class: 'mb-none' }, `${idleNames} ${idle.who.length === 1 && names[0] !== 'You' ? 'has' : 'have'} nothing to do. There is work on the land:`),
             h('ul', { class: 'mb-list' }, idle.options.map((w, k) => h('li', null, h('div', { class: 'mb-row' },
               icon(w.kind, 'i'), h('span', { class: 'mb-what' }, h('b', null, `${FREE_TEXT[w.kind]} ${S.FIELD_NAMES[w.field]}`), h('span', { class: 't-caption' }, w.gain)),
               h('span', { class: 'mb-keys' }, h('button', { class: 'btn', type: 'button', testid: `todo-free-${k}`, onclick: () => { close(); o.free(w) } }, FREE_KEY[w.kind]))))))) : null,

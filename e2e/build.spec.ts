@@ -105,7 +105,7 @@ test('the To do sheet says who has nothing to do and gives them work, and says w
   const todo = page.getByTestId('todo')
   await expect(todo).toBeVisible()
   const block = todo.getByTestId('todo-idle')
-  await expect(block).toContainText('You have nothing to do. Give yourself work on the land:')
+  await expect(block).toContainText('You have nothing to do. There is work on the land:')
   await expect(todo).not.toContainText('Your crew is working through the work list')
   // What is coming is said under its label, without "Next up" a second time.
   await expect(todo).not.toContainText('Next up')

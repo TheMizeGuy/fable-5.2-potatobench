@@ -274,7 +274,7 @@ packing shed says what a winter of the farmer's own packing adds at today's pric
 pay for itself. The others keep "Worth it when ...": the game has no sum for them.
 
 The To do sheet lists what needs an answer. When nothing does and people stand idle, it names them and gives the
-same work as the keys under the goal slip ("You have nothing to do. Give yourself work on the land:"); it used to say
+same work as the keys under the goal slip ("You have nothing to do. There is work on the land:"); it used to say
 the crew was working through the list. What is coming is said once, under "Coming up".
 
 ## One place for a card (14 November)
