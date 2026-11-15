@@ -2,6 +2,7 @@
 // on the land) and a face pin that marks them on the land at one size whatever the camera does.
 import { personLook, type PersonLook } from '../../game/looks.ts'
 import { h, s } from '../dom.ts'
+import { icon } from '../icons.ts'
 
 // Who: a person or applicant (anything with a name; the farmer's is 'You'), a name, or a look already worked out.
 export type Who = { name: string } | string | PersonLook
@@ -51,7 +52,7 @@ export function pin(who: { name: string } | string, state: PinState = 'rest', o:
   const kids = [
     h('i', { class: 'foot' }), h('i', { class: 'stem' }),
     h('span', { class: 'head' }, portrait(look, 36)),
-    o.count && o.count > 1 ? h('span', { class: 'badge count num', 'aria-hidden': 'true' }, String(o.count))
+    o.count && o.count > 1 ? h('span', { class: 'badge count num', 'aria-hidden': 'true' }, icon('people', 'i'), String(o.count))
       : state === 'needs' || state === 'hurt' ? h('span', { class: 'badge', 'aria-hidden': 'true' }, state === 'hurt' ? '+' : '!') : null,
     o.name ? h('span', { class: 'name' }, name === 'You' ? 'You' : name.split(' ')[0]) : null,
   ]

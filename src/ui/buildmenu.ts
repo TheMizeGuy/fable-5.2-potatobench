@@ -38,12 +38,15 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
   const app = ctx.app
   const run = (cmd: S.Cmd) => { const r = ctx.run(cmd); done(r.ok ? F.localize(r.events[0]?.text ?? 'Done.') : F.localize(r.err), r.ok) }
   const loads = (n: number) => F.num(Math.ceil(n))
+  // What the stand takes in a day over selling the same potatoes at the market's price (src/sim/season.ts, standSales).
+  const grown = c.plans.find(p => p?.crop === 'potato')?.variety
+  const standExtra = grown ? Math.round(S.STAND_CWT * S.basePrice(app.world, c, grown) * (S.STAND_PRICE - 1) / 10) * 10 : 0
   const buildings: Item[] = S.buildingInfo(c).filter(b => b.yard === S.HOME_YARD).map(b => {
     const mats = [b.logs > 0 ? `${loads(b.logs)} logs` : '', b.stone > 0 ? `${loads(b.stone)} stone` : ''].filter(Boolean).join(' and ')
     const bought = b.buyLogs > 0 || b.buyStone > 0
     const crewDays = Math.max(1, Math.ceil(b.days / Math.max(1, c.crew.length)))
     return {
-      id: `build-${b.kind}`, glyph: BUILD_GLYPH[b.kind], name: b.name, gist: BUILD_GIST[b.kind], does: plain(b.does),
+      id: `build-${b.kind}`, glyph: BUILD_GLYPH[b.kind], name: b.name, gist: b.kind === 'stand' && standExtra > 0 ? `About +${F.money(standExtra)} a day once a field is dug` : BUILD_GIST[b.kind], does: plain(b.does),
       price: F.money(b.total), cost: b.total,
       tag: b.kind === 'stand' && b.state === 'none' ? 'The cheapest building: a good first one' : undefined,
       sub: `Your crew builds it in about ${F.plural(crewDays, 'day')}${mats ? ` · ${mats}, ${bought ? 'included in the price' : 'from your yard'}` : ''}`,

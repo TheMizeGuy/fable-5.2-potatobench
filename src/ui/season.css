@@ -171,7 +171,8 @@
 .pin-at .pin.needs .badge, .pin-at .pin.is-hurt .badge { animation: stamp-in var(--t-stamp) var(--ease-out); }
 .pin-at .pin.is-hurt .head { transition: transform var(--t-sheet) var(--ease-paper); }
 .pin-at .pin .name { animation: slip-in var(--t-slip) var(--ease-out); }
-.pin .badge.count { left: 12px; width: auto; min-width: 20px; padding: 0 5px; border-radius: 10px; background: var(--ink); font-size: 14px; }
+.pin .badge.count { left: 12px; width: auto; min-width: 20px; padding: 0 6px 0 4px; display: inline-flex; align-items: center; gap: 2px; border-radius: 10px; background: var(--ink); font-size: 14px; }
+.pin .badge.count .i { --i: 12px; }
 @media (hover: hover) { .pin-at button.pin:hover .head { box-shadow: 0 0 0 3px var(--c), 0 0 0 4.5px #1e1c19, 0 0 0 6px var(--paper), 0 3px 5px rgb(0 0 0 / 0.45); } }
 .touch .pin-at button.pin .head::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; }
 .pin-list-at { z-index: 30; }

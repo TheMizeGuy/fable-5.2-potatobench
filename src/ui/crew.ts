@@ -265,7 +265,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
             oncontextmenu: (e: Event) => { e.preventDefault(); bump(j.id) },
             onpointerenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse' && j.field >= 0) app.setHover(j.field) },
             onpointerleave: () => { if (app.hover === j.field) app.setHover(-1) },
-          }, icon(j.kind, 'i'), ctx.layout() === 'wide' ? h('span', { class: 'q-name' }, shortPlace(j.field)) : where(c, j.field),
+          }, icon(j.kind, 'i'), ctx.layout() === 'wide' ? h('span', { class: 'q-name' }, `${JOB_VERB[j.kind]} \u00b7 ${shortPlace(j.field)}`) : where(c, j.field),
           o && o.unit < 0 ? h('span', { class: 'q-tag q-nobody', testid: `nobody-${j.id}`, 'aria-hidden': 'true' }, '!')
             : taker && many ? h('span', { class: `q-tag${who?.pinned ? ' pinned' : ''} q-${o!.when}`, style: `--c:${ringFor(c, taker.id)}`, 'aria-hidden': 'true' }, initial(taker.name))
               : many && who ? h('span', { class: `q-tag${who.pinned ? ' pinned' : ''}`, style: `--c:${ringFor(c, who.u.id)}`, 'aria-hidden': 'true' }, initial(who.u.name)) : null,
