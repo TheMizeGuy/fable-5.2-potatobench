@@ -809,8 +809,11 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       ...catBox, ...(t.at ? [pad(t.at, 10)] : []), ...(fistBox ? [pad(fistBox, 4)] : []), ...(noteBox ? [noteBox] : [])]
     const holder = t.el?.closest('.queue, .cat-open, .command, .person-card, .work')
     if (holder) must2.push(box(holder.getBoundingClientRect()))
-    for (const [k, compact, also] of [[0, false, tags], [0, false, []], [0, true, []], [1, true, []], [1, false, []], [2, true, []]] as const) {
+    // Last of all a narrower slip: a field's record open beside the spring's catalogue on a small desk leaves a strip
+    // of land narrower than the slip, and the note went unseen there.
+    for (const [k, compact, also, slim] of [[0, false, tags, false], [0, false, [], false], [0, true, [], false], [1, true, [], false], [1, false, [], false], [2, true, [], false], [2, false, [], true], [2, true, [], true]] as const) {
       slip.classList.toggle('compact', compact)
+      slip.classList.toggle('slim', slim)
       found = findPlace(toScreen(slip.offsetWidth), toScreen(slip.offsetHeight), [...(k === 0 ? [...hard, ...soft] : k === 1 ? hard : must2), ...also].map(a => pad(a, 8)), k === 0 ? [] : costs)
       if (found) { tier = k; break }
     }

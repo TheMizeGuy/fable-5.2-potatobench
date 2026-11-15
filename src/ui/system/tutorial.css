@@ -22,6 +22,8 @@
 /* With little land free, the slip gives up its reason: the screen reader still hears it. */
 .guide.compact .guide-why { display: none; }
 .guide.compact { gap: 4px; padding-top: 8px; }
+/* With only a strip of land free beside a card, a narrower slip. */
+.guide.floating.slim { width: min(232px, calc(calc(100 * var(--vw, 1vw)) - 24px)); }
 
 /* In spring the slip is tucked into the seed catalogue, over the order blank. */
 .catalogue:has(> .guide-slot) { grid-template-rows: auto minmax(0, 1fr) auto auto; }

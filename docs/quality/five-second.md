@@ -172,3 +172,24 @@ Each field's tag now says its state at a wide desk ("potatoes forming", "resting
 fields without asking why two are yellow. The marks are where they were. The one thing both still ask of the build
 menu is what a building earns back; done for the farm stand in `live-72` from its own figures ("Pays for itself in
 about 10 days of selling"), and not for the others, for which the game has no sum.
+
+## Eleventh pass, on `live-73`
+
+| | first screen | later | build menu |
+|---|---|---|---|
+| strategy player | 8 | 6 | 7 |
+| casual player | 8 | 5 | 7 |
+
+No movement again, and the same asks: what the other buildings earn back, the vine kill's name, the work list's
+marks. The pass is closed here; a twelfth on stills would say the same.
+
+## The screens after the first season
+
+`tools/quality/later.ts` draws, at the owner's window, what the stills above never reached: the cellar in winter,
+the ledger, the second spring's plan, a record open in it and its folds. Nothing in them was broken at that size.
+At 1280 by 800 one thing was: with the record of a low field open beside the spring's catalogue, the strip of land
+left is 260 px wide and the agent's note is 304, so the note found no place and hid itself, and the agent said
+nothing about the record. It was met as a browser test that failed now and then in full runs (the walk is sent to
+whichever field's tag has room for the pointer, and only a low field's record lands mid-screen). The note now
+has a narrower form (232 px) tried last, and `e2e/tutorial.spec.ts` opens the lowest field's record at that size
+and asks for the note beside it, over neither the record nor the catalogue.

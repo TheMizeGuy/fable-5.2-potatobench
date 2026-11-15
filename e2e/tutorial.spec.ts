@@ -489,6 +489,46 @@ test('in the second spring the goal slip stands down while the agent has a note,
   expect(errors, errors.join('\n')).toEqual([])
 })
 
+// A field's record open beside the spring's catalogue on a small desk leaves a strip of land narrower than the note.
+// (The walk above met this now and then, when it was sent to the lowest field: the note found no place and hid itself,
+// and the agent said nothing about the record.)
+test('the note for a field\'s record has a place where the record leaves only a strip of land', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'run at the desk')
+  test.setTimeout(120_000)
+  const errors = watchErrors(page)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await secondSpring(page, 'seed')
+  await expect(note(page, 'seed')).toBeVisible({ timeout: 15_000 })
+  const laid = () => page.evaluate(() => {
+    const ui = document.getElementById('ui')!
+    const slip = ui.querySelector<HTMLElement>('[data-testid="guide-slip"][data-lesson="crop"]')
+    if (!slip || getComputedStyle(slip).visibility === 'hidden') return 'no note'
+    const b = slip.getBoundingClientRect()
+    const over = ['[data-testid="plan-card"]', '.catalogue'].filter(sel => {
+      const e = ui.querySelector(sel)
+      if (!e) return false
+      const r = e.getBoundingClientRect()
+      return b.left < r.right - 1 && b.right > r.left + 1 && b.top < r.bottom - 1 && b.bottom > r.top + 1
+    })
+    if (over.length) return `over ${over.join(' and ')}`
+    return b.left >= 0 && b.top >= 0 && b.right <= innerWidth && b.bottom <= innerHeight ? 'placed' : 'off the window'
+  })
+  for (const field of ['Brook Field', 'Upper Field']) {
+    const tag = page.locator('#ui .plate-layer [data-testid^="field-"]').filter({ hasText: field }).first()
+    if (!await tag.count()) continue
+    await tag.click()
+    await expect(page.getByTestId('plan-card')).toBeVisible()
+    await expect.poll(laid, { timeout: 15_000, message: `the note with ${field}'s record open` }).toBe('placed')
+    await picture(page, `b-spring-record-${field.split(' ')[0].toLowerCase()}-1280`)
+    await page.locator('#ui [data-testid="plan-card"] button.close').first().click()
+    await expect(page.getByTestId('plan-card')).toBeHidden()
+    // (the note is the first record's: closing it passes the step, so the second field is only looked at if the
+    // first was not on the land)
+    break
+  }
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
 // Round seven (7): a foreman is not offered to a farm with one hand, by the slip, the ring or the tutorial.
 test('a farm with one hired hand is never asked to name a foreman, and the key says what it costs in work as well as pay', async ({ page, isMobile }) => {
   test.skip(isMobile, 'run at the desk, at the players\' size')
