@@ -96,3 +96,17 @@ The build menu's short effect beside each name was noticed by both. The later sc
 line about the vine kill, the slip for idle people and a test dig's toast read as three tasks with none first. Done
 from that in `live-62`, not re-marked: while somebody is idle the slip itself says "Keep your crew busy", with
 what is being waited for as its second line and the work's keys right under it.
+
+## Fifth pass, on `live-63`
+
+| | first screen | later | build menu |
+|---|---|---|---|
+| strategy player | 8 | 6 | 7 |
+| casual player | 7 | 5 | 8 |
+
+Both read the money board as meant ("You owe", "Year-end forecast", the goal under it). Still marked down: the
+round stamps on the other potato fields beside the one Plant key ("it looks like I need four clicks"); the later
+screen's slip, idle keys and a test dig's toast as three things with none first; whether a purchase adds to what is
+owed; the build menu's sentences. Done from that in `live-64`, not re-marked: at the word to plant the one key
+stands alone; a build row is its name, its effect, its time and its price, with the sentence on its slip; and a row
+says "Goes on your loan" or "Paid from your cash" with the year-end forecast it leaves.

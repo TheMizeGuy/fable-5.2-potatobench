@@ -1147,8 +1147,13 @@ test('after one Plant stamp gives the word, a press where another stamp stood op
   await page.getByTestId('goal-faster').click()
   const fit = await atTheAsk(page, 'year one, Skip ahead')
   expect(fit.length).toBeGreaterThan(1)
+  // (One field carries the Plant key since 15 November. A player's run of presses after it lands beside the other
+  // fields' tags, where their stamps stood before and where "on the list" comes: those are the spots pressed.)
+  const keyed = fit.find(i => true) !== undefined ? await page.evaluate(list => list.find(i => !!document.querySelector(`#ui .plate-layer [data-testid="badge-${i}"]`)) ?? -1, fit) : -1
+  expect(keyed).toBeGreaterThanOrEqual(0)
   const spots: { x: number; y: number }[] = []
-  for (const i of fit) { const b = (await page.getByTestId(`badge-${i}`).boundingBox())!; spots.push({ x: b.x + b.width / 2, y: b.y + b.height / 2 }) }
+  { const k = (await page.getByTestId(`badge-${keyed}`).boundingBox())!; spots.push({ x: k.x + k.width / 2, y: k.y + k.height / 2 }) }
+  for (const i of fit.filter(x => x !== keyed)) { const k = (await page.getByTestId(`field-${i}`).boundingBox())!; spots.push({ x: k.x + k.width + 22, y: k.y + k.height / 2 }) }
   const tags: { x: number; y: number }[] = []
   for (const i of fit) { const b = (await page.getByTestId(`field-${i}`).boundingBox())!; tags.push({ x: b.x + 20, y: b.y + b.height / 2 }) }
   await page.mouse.click(spots[0].x, spots[0].y)
