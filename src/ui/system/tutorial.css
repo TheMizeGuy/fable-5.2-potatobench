@@ -102,3 +102,8 @@
 .hud.agent:not(:has(.season-screen)) .topbar :is(.goal, .goal-go) { visibility: hidden; }
 /* The first telegram carries the agent's own line that the game is paused: the board's tag would say it twice. */
 .hud:has(.telegram .guide-line) .topbar .stopped-tag { display: none; }
+
+/* The first thing asked of a new player is asked once: while the tip that says "Click the orange Plant key" is up,
+   the goal slip (which says "Start planting 0/4") stands down, keeping its place. Two viewers who knew nothing of
+   the game, of the slip, the tip and the key together: "three plant prompts at once". */
+.hud:has([data-testid="guide-slip"][data-lesson="word"]) .season-screen .topbar :is(.goal, .goal-go) { visibility: hidden; }

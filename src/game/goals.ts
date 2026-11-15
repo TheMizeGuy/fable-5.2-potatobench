@@ -215,7 +215,7 @@ export function waitingFor(c: Campaign, world?: World): { title: string; when: s
   // comes near: before the first one it comes with the first blight weather, after it with each new forecast of it.
   if (up.length && !crew('spray') && sprayWayNow(c) !== 'none' && !(due && due.day - s.day <= KILL_NEAR)) {
     if (!s.fields.some(f => f.lastSpray >= 0)) return { title: 'The crop is growing', when: 'your crew tends it; your next decision is a spray, when blight weather comes' }
-    return { title: 'Your next decision is a spray', when: blightAhead(world, c) }
+    return { title: 'Next up: a spray', when: blightAhead(world, c) }
   }
   if (up.length && !crew('kill')) {
     // Due and not yet ordered: the decision is the player's now, and the goal or the stamp says so.
@@ -226,7 +226,7 @@ export function waitingFor(c: Campaign, world?: World): { title: string; when: s
       return { title: `Killing the vines: ${dead} of ${potato.length} ${potato.length === 1 ? 'field' : 'fields'}`, when: 'on the work list' }
     }
     // (two viewers who knew nothing of potatoes read "killing the vines" as a disaster: the line says what it is for)
-    return { title: 'Your next decision is killing the vines', when: due ? `due around ${formatDay(c.year, due.day, true)}, to toughen the skins for digging` : 'in September, to toughen the skins for digging' }
+    return { title: 'Next up: kill the vines', when: due ? `due around ${formatDay(c.year, due.day, true)}, to toughen the skins for digging` : 'in September, to toughen the skins for digging' }
   }
   if (!crew('dig') || !crew('haul')) return null
   if (potato.some(i => !s.fields[i].weighed && s.fields[i].status !== 'lost')) return up.length ? { title: 'The crop is growing', when: 'your crew kills the vines and digs it; then you sell or store it' } : { title: 'The harvest is coming in', when: 'your crew digs and hauls; then you sell or store it' }

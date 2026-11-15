@@ -71,7 +71,7 @@ describe('what the game says agrees with what the farm holds', () => {
         said.add(w.title.replace(/\d+/g, 'N'))
         const at = `seed ${seed}, day ${s.day}: "${w.title} / ${w.when}"`
         if (/until blight weather/.test(w.title)) expect(s.fields.some(f => f.lastSpray >= 0), at).toBe(false)
-        if (/^Your next decision is killing the vines/.test(w.title)) {
+        if (/^Next up: kill the vines/.test(w.title)) {
           expect(s.jobs.some(j => j.kind === 'kill'), at).toBe(false)
           expect(w.when, at).not.toMatch(/due since/)
         }
@@ -79,7 +79,7 @@ describe('what the game says agrees with what the farm holds', () => {
         if (/^Planting:/.test(w.title)) expect(S.plantWordGiven(s), at).toBe(true)
       })
     }
-    expect([...said].some(t => /decision is a spray/.test(t))).toBe(true)
+    expect([...said].some(t => /^Next up: a spray/.test(t))).toBe(true)
   })
 
   it('the year-end figure\'s reason names a vine kill, a test dig or tubers setting only on the day it happened', () => {

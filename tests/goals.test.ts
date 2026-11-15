@@ -311,7 +311,7 @@ describe('what the player is waiting for', () => {
     // Spraying decided: the next decision is the vine kill, with its date.
     expect(S.apply(w, c, { t: 'sprayWay', way: 'auto' }).ok).toBe(true)
     const kill = waitingFor(c)!
-    expect(kill.title).toBe('Your next decision is killing the vines')
+    expect(kill.title).toBe('Next up: kill the vines')
     expect(kill.when).toMatch(/^due (around|since) [A-Z][a-z]+ \d+, to toughen the skins for digging$/)
     // No title the slip can show names a job of the crew's as the player's goal.
     for (const t of [kill.title, ...said, ...seen]) expect(t).not.toMatch(/Walk a field|Hill the rows|Do a test dig|Dig a field|Bring the crop in/)

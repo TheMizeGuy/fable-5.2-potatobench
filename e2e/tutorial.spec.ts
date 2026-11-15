@@ -1119,7 +1119,7 @@ test('the slip never gives the crew\'s job as the player\'s goal: after planting
   await reach(page, `q.g().app.do({ t: 'sprayWay', way: 'auto' })`)
   await putAway(page)
   if (!(await game<boolean>(page, 'sim.pressing(app.world, c).length > 0 || app.needs().some(n => n.need && ["rogue", "spray", "kill", "water"].includes(n.need.act))'))) {
-    await expect(goal).toContainText('Your next decision is killing the vines')
+    await expect(goal).toContainText('Next up: kill the vines')
     await expect(goal).toContainText(/due (around|since) [A-Z][a-z]+ \d+/)
   }
   await expect(goal).not.toContainText(/Walk a field for blight|Hill the rows|Do a test dig|handles it automatically/)
