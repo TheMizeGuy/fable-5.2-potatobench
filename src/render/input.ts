@@ -188,12 +188,16 @@ export function attachInput(
     rig.zoomAt(Math.exp(Math.max(-0.8, Math.min(0.8, step))), p.x, p.y, viewport())
   }
 
+  const WASD: Record<string, string> = { w: 'ArrowUp', a: 'ArrowLeft', s: 'ArrowDown', d: 'ArrowRight' }
   // Keys: only the camera's own, and never while the player is typing or a paper is open over the land.
   const mine = (e: KeyboardEvent): string => {
     if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return ''
     const t = e.target as HTMLElement | null
     if (t && t.closest && t.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], dialog, [role="dialog"], [role="menu"], [role="listbox"], [role="slider"], [role="radiogroup"], [role="tablist"]')) return ''
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Home') return e.key
+    // W, A, S and D move the view as the arrows do while no field is in hand (with one, W, S and D are its Water,
+    // Spray and Dig): a first-time player held W to move and was told to pick a field.
+    if (!app.selection.length && WASD[e.key.toLowerCase()]) return WASD[e.key.toLowerCase()]
     if (e.key === 'q' || e.key === 'Q') return 'q'
     if (e.key === 'e' || e.key === 'E') return 'e'
     if (e.key === 'PageDown' || e.key === 'PageUp') return e.key
@@ -206,6 +210,7 @@ export function attachInput(
     if (k === 'Home') { if (!e.repeat) home() } else held.add(k)
   }
   const onKeyUp = (e: KeyboardEvent) => {
+    if (WASD[e.key.toLowerCase()]) held.delete(WASD[e.key.toLowerCase()])
     for (const k of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageDown', 'PageUp']) if (e.key === k) held.delete(k)
     if (e.key === 'q' || e.key === 'Q') held.delete('q')
     if (e.key === 'e' || e.key === 'E') held.delete('e')

@@ -125,7 +125,8 @@ export function incidentCard(ctx: Ctx): IncidentCard {
       h('div', { class: `replies${info.choices.length > 2 ? ' three' : ''}` }, info.choices.map((ch, k) => ch.ok
         ? h('button', { class: `reply${ch.id === info.fallback ? '' : ' first'}`, type: 'button', testid: `answer-${ch.id}`, 'aria-keyshortcuts': keys ? String(k + 1) : null, onclick: () => answer(c, info, ch) },
           key(String(k + 1)), h('b', { class: 'c-title' }, ch.label), h('span', { class: 'c-does' }, does(c, inc, ch)), h('span', { class: 'c-cost' }, cost(c, inc, ch)))
-        : h('div', { class: 'reply off', testid: `answer-${ch.id}-off` }, key(String(k + 1)), h('b', { class: 'c-title' }, ch.label), h('span', { class: 'c-does' }, F.localize(ch.why))))),
+        // (pressed all the same, it says why in red, as its number key does: a player pressed Hire and "nothing happened")
+        : h('div', { class: 'reply off', testid: `answer-${ch.id}-off`, onclick: () => { err = F.localize(ch.why); ctx.dirty() } }, key(String(k + 1)), h('b', { class: 'c-title' }, ch.label), h('span', { class: 'c-does' }, F.localize(ch.why))))),
       err ? h('p', { class: 'tg-err c-red', role: 'status' }, err) : null,
       fallback ? h('p', { class: 'lapse' }, stamp(`Expires ${F.date(c.year, info.until + 1, true)}`, { small: true, ink: 'violet' }), ` If you don't answer: ${fallback.label.toLowerCase()}.`) : null,
     ]

@@ -679,7 +679,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
               season ? h('button', { class: 'forecast', type: 'button', testid: 'forecast', onclick: () => o.onAlmanac?.() },
                 // The figures are for the eye; a screen reader gets the days in words.
                 h('span', { class: 'sr' }, `${fc.map(x => x.said).join(' ')} Press to open the almanac for the full forecast.`),
-                fc.slice(0, days).map(x => h('span', { class: 'd', 'aria-hidden': 'true' },
+                // (each day says itself under the pointer: a player hovered the red blight mark and got nothing)
+                fc.slice(0, days).map(x => h('span', { class: 'd', 'aria-hidden': 'true', title: ctx.touch() ? undefined : x.said },
                   h('span', { class: 't-label' }, x.day),
                   icon(x.sky, 'i'),
                   h('span', { class: 'hi num' }, `${F.degrees(x.hi)}°`),

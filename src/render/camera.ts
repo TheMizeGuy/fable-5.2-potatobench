@@ -389,27 +389,54 @@ export class CameraRig {
   // A left-drag takes hold of the land under the pointer, and carries that very point with it: wherever the pointer
   // goes while the button is down, the ground first pressed is under it.
   private grip: { x: number; y: number; z: number } | null = null
+  // Where there is no land near enough under the pointer to take hold of (the sky, the far hills, or ground a long
+  // way off, which is most of the window when the view is close and low), the drag still moves the land: by the
+  // pointer's own travel, at the pace the ground two thirds of the way down the window would go under it. (The owner,
+  // 15 November: "You cant move around easily if zoomed in on a plot for example as the mouse cant get a handle": a
+  // drag begun in the upper half of a close view did nothing at all.)
+  private loose: { x: number; y: number } | null = null
   grab(px: number, py: number, vp: Viewport): void {
     this.place(this.probe, this.goal, vp, this.shift.x, this.shift.y)
-    this.grip = this.landAt(this.probe, px, py, vp, this.goal)
+    const hit = this.landAt(this.probe, px, py, vp, this.goal)
+    const o = this.probe.position
+    const near = !!hit && Math.hypot(hit.x - o.x, hit.z - o.z) <= this.goal.dist * 4 + 40
+    this.grip = near ? hit : null
+    this.loose = near ? null : { x: px, y: py }
   }
 
   dragTo(px: number, py: number, vp: Viewport): void {
     this.byHand()
     const g = this.grip
-    if (!g) return
-    // The view keeps its bearing and its height over the land: the camera is moved level until the ray through the
-    // pointer passes through the point held. Twice, since its height follows the ground it comes over.
-    for (let k = 0; k < 2; k++) {
-      this.place(this.probe, this.goal, vp, this.shift.x, this.shift.y)
-      this.v.set((px / vp.w) * 2 - 1, -(py / vp.h) * 2 + 1, 0.5).unproject(this.probe).sub(this.probe.position).normalize()
-      const o = this.probe.position, d = this.v
-      if (d.y > -1e-3) return
-      const t = (g.y - o.y) / d.y
-      if (!(t > 0) || t > this.goal.dist * 8 + 600) return
-      this.goal.x += g.x - d.x * t - o.x
-      this.goal.z += g.z - d.z * t - o.z
+    if (g) {
+      // The view keeps its bearing and its height over the land: the camera is moved level until the ray through the
+      // pointer passes through the point held. Twice, since its height follows the ground it comes over.
+      for (let k = 0; k < 2; k++) {
+        this.place(this.probe, this.goal, vp, this.shift.x, this.shift.y)
+        this.v.set((px / vp.w) * 2 - 1, -(py / vp.h) * 2 + 1, 0.5).unproject(this.probe).sub(this.probe.position).normalize()
+        const o = this.probe.position, d = this.v
+        const t = d.y > -1e-3 ? -1 : (g.y - o.y) / d.y
+        // (the pointer carried up past where the point held can follow: the drag goes on by the pointer's travel)
+        if (!(t > 0) || t > this.goal.dist * 8 + 600) { this.grip = null; this.loose = { x: px, y: py }; return }
+        this.goal.x += g.x - d.x * t - o.x
+        this.goal.z += g.z - d.z * t - o.z
+      }
+      this.bound(vp)
+      return
     }
+    const l = this.loose
+    if (!l) return
+    const dx = px - l.x, dy = py - l.y
+    this.loose = { x: px, y: py }
+    if (!dx && !dy) return
+    this.place(this.probe, this.goal, vp, this.shift.x, this.shift.y)
+    const rx = vp.left + (vp.w - vp.left - vp.right) / 2, ry = vp.top + (vp.h - vp.top - vp.bottom) * 0.68
+    const a = this.ground(this.probe, rx, ry, vp, this.goal), b = this.ground(this.probe, rx + dx, ry + dy, vp, this.goal)
+    let mx = a.x - b.x, mz = a.z - b.z
+    // (never faster than a hand's breadth of travel for a screen's width of land)
+    const most = this.goal.dist * 0.004 * Math.hypot(dx, dy), len = Math.hypot(mx, mz)
+    if (len > most) { mx *= most / len; mz *= most / len }
+    this.goal.x += mx
+    this.goal.z += mz
     this.bound(vp)
   }
 

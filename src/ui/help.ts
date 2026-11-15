@@ -68,7 +68,7 @@ export function openHelp(ctx: Ctx): void {
               row(keys('Space', 'F', '+', '−'), `Pause or resume, cycle through ${SPEED_X[1]}, ${SPEED_X[2]} and ${SPEED_X[3]}, speed up, and slow down.`),
               row(keys('Backspace'), 'Cancel the last order on the work list.'),
               row(keys('I', 'M', 'Esc'), 'Open the almanac, open the menu, and close or deselect.'),
-              row(keys('Arrows', 'Q', 'E', 'Home'), 'Move the view, rotate it, and center the farm.'),
+              row(keys('Arrows', 'Q', 'E', 'Home'), 'Move the view, rotate it, and center the farm. W, A, S and D move it too while no field is selected.'),
               row(keys('PgDn', 'PgUp'), 'Tilt the view down toward the ground, and back up.'),
               row(['Drag, wheel, right-drag'], 'Drag to move, scroll to zoom, and right-drag to rotate (sideways) or tilt (up and down).')))),
           h('section', null,

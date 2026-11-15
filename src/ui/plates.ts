@@ -44,6 +44,8 @@ const FAR_IN = 10, FAR_OUT = 12
 // How far the camera may carry the tags with their fields before the crowding is settled again, in pixels, or zoom
 // (the log of the change in scale). Often, so that what each settling changes is small.
 const RESETTLE_PX = 12, RESETTLE_ZOOM = 0.04
+// How long the zoom must have stood still before the tags are put again, ms.
+const ZOOM_REST_MS = 140
 // A tag put somewhere else comes to its new place on a spring (critically damped, at rest in about a quarter of a
 // second), so being put again is seen as a glide and never as a jump. Further than FAR_MOVE it does not cross the
 // land: it fades in where it now stands.
@@ -184,6 +186,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   const FADE_MS = 1500
 
   let worded = false, asked = false
+  let lastK = NaN, zoomAt = -Infinity, owed = false
   // A stamp or "on the list" already there is drawn again without stamping it down a second time.
   const was: string[] = []
 
@@ -714,11 +717,21 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     // A zoom changes the fields' size on the screen under tags that keep theirs, so it settles them too.
     const k = scale()
     const zoomed = !!laid && Number.isFinite(k) && Number.isFinite(laid.k) && Math.abs(Math.log(k / laid.k)) > RESETTLE_ZOOM
-    const far0 = !laid || asked || laid.key !== key || ((moving || rested) && (zoomed || anchors.some((a, i) => {
+    let far0 = !laid || asked || laid.key !== key || ((moving || rested) && (zoomed || anchors.some((a, i) => {
       const b = laid!.anchors[i]
       return finite(a) !== finite(b) || (finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > (rested ? 0.5 : RESETTLE_PX))
     })))
     const now = performance.now()
+    // While a zoom is in flight the tags ride with their fields and are put again once, when it comes to rest. (Put
+    // again at every step of it they cost 25 to 55 ms a frame: the owner, 15 November, "if you zoom in fast or zoom
+    // out fast there a noticeable hitch/stutter".)
+    // (told by the camera's own distance: the tags' measure of it needs three fields in view, and close in they are not)
+    const z = ctx.view.zoom?.() ?? k
+    if (Number.isFinite(z) && Number.isFinite(lastK) && Math.abs(Math.log(z / lastK)) > 0.002) zoomAt = now
+    lastK = z
+    const inZoom = now - zoomAt < ZOOM_REST_MS
+    if (inZoom && far0 && laid && !asked && laid.key === key) { far0 = false; owed = true }
+    else if (!inZoom && owed) { far0 = true; owed = false }
     spring(Math.min(0.05, clock ? (now - clock) / 1000 : 0))
     clock = now
     resting = !moving

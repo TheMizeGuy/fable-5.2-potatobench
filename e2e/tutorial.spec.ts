@@ -527,6 +527,31 @@ test('the note for a field\'s record has a place where the record leaves only a 
   expect(errors, errors.join('\n')).toEqual([])
 })
 
+// Round ten: a player with tips on was never asked how spraying is to be done (the question waited for a note that
+// had been cut), and ordered every spray by hand every three days. It is asked in a guided first year too.
+test('a guided first year asks how spraying is to be done when blight weather first comes', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'run at the desk')
+  test.setTimeout(180_000)
+  const errors = watchErrors(page)
+  await open(page)
+  await reach(page, `const guide = window.__countyGuide; guide.reset(); guide.skipTo('stamp'); const { app, sim } = q.g(); app.newGame(1987, 3); app.do({ t: 'begin' })
+    const c = app.campaign
+    for (let g = 0; g < 200 && !(c.season.watchDay >= 0 && c.season.fields.some(f => f.status === 'growing')); g++) {
+      c.incidents = []
+      for (const a of sim.advise(app.world, c)) if (a.act !== 'wait' && a.act !== 'close' && a.act !== 'sell' && a.act !== 'spray') app.do({ t: 'job', kind: a.act, field: a.field })
+      app.do({ t: 'day' })
+    }
+    c.incidents = []; app.setSpeed(1)`)
+  expect(await page.evaluate(() => (globalThis as unknown as Win).__county.app.campaign.season.watchDay)).toBeGreaterThanOrEqual(0)
+  const ask = page.getByTestId('spray-ask')
+  await expect(ask).toBeVisible({ timeout: 30_000 })
+  await expect(ask.getByTestId('spray-way-auto')).toBeVisible()
+  await ask.getByTestId('spray-way-auto').click()
+  await expect(ask).toBeHidden()
+  expect(await page.evaluate(() => { const { app, sim } = (globalThis as unknown as Win & { __county: { sim: { sprayWayNow(c: unknown): string | null } } }).__county; return sim.sprayWayNow(app.campaign) })).toBe('auto')
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
 // Round seven (7): a foreman is not offered to a farm with one hand, by the slip, the ring or the tutorial.
 test('a farm with one hired hand is never asked to name a foreman, and the key says what it costs in work as well as pay', async ({ page, isMobile }) => {
   test.skip(isMobile, 'run at the desk, at the players\' size')

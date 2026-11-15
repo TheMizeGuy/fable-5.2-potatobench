@@ -36,9 +36,6 @@ export function guidedFarm(): void { guide.restart() }
 // The guided first year: the guide speaks for the toasts, and the screen grows with the player.
 export function guidedYear(c: S.Campaign | null): boolean { return guide.on && !!c && c.history.length === 0 }
 
-// A question the season would ask by itself waits for the note that explains it.
-export function mayAsk(c: S.Campaign | null, id: string): boolean { return !guidedYear(c) || guide.passed(id) }
-
 // The agent's one line inside a card the first time its kind comes (a telegram, a weigh ticket): the card is the one
 // voice, so the guide speaks in it.
 const LINES: Record<string, string> = {

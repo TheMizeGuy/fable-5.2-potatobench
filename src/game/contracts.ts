@@ -57,6 +57,8 @@ export interface FieldView {
   // the camera moves; and where a point of the land is on the screen now (off it, the way it lies, visible false).
   groundAt?(x: number, y: number): Place | null
   screenOf?(p: Place): { x: number; y: number; visible: boolean }
+  // How far out the camera stands now, metres: for telling a zoom in flight from one at rest.
+  zoom?(): number
   // Brings something into the middle of the picture, from as far off as the camera stands, and selects nothing.
   show?(what: { unit: number } | { yard: number } | { thing: Thing } | { at: Place }): void
   // Settles once the land has shown a test dig's hill lifted, or the last row of a day's digging come out

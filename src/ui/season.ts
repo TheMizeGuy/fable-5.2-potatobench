@@ -25,7 +25,7 @@ import { anchored, ties, type Land, type Mode } from './tie.ts'
 import { hint as hintText, isJob, isStale, jobText, JOB_VERB, KEY_JOB, stageGlyph } from './rules.ts'
 import type { Ink } from './system/parts.ts'
 import { clock, topBar } from './top.ts'
-import { guidedYear, mayAsk, quietTips } from './tutorial.ts'
+import { guidedYear, quietTips } from './tutorial.ts'
 import './season.css'
 import { toLocal, toScreen } from './scale.ts'
 
@@ -357,8 +357,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const s0 = c.season
     const key = `${c.seed}.${c.year}`
     if (!s0 || s0.watchDay < 0 || sprayAsked === key || sprayWay(c) || S.seasonDone(c) || sprayAsking() || !s0.fields.some(f => f.status === 'growing')) return
-    // In the guided first year the question waits for the note that says what blight is.
-    if (!mayAsk(c, 'blight')) return
+    // (asked in a guided first year as in any other: it used to wait there for a note about blight, and when that
+    // note was cut the question was never asked of a player with tips on, who then ordered every spray by hand)
     sprayAsked = key
     if (S.routineInfo(c).some(r => r.kind === 'spray' && r.auto)) return
     askSpray(ctx)
@@ -827,6 +827,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     }
     // B with no field in hand opens the build menu (with one, it is that field's Cut brush).
     if (low === 'b' && !e.ctrlKey && !app.selection.length) { openBuild(ctx); return true }
+    // (with no field in hand W, A, S and D are the camera's: src/render/input.ts)
+    if (!app.selection.length && !e.ctrlKey && !e.shiftKey && (low === 'w' || low === 'a' || low === 's' || low === 'd')) return false
     const kind = KEY_JOB[low]
     if (kind) { card.give(kind, e.ctrlKey || e.shiftKey); return true }
     return false

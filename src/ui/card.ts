@@ -443,10 +443,19 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const waterKind = f.moistureLabel === 'wilting' ? 'bad' : f.moistureLabel === 'dry' ? 'warn' : f.tooWet ? 'wet' : undefined
     const waterWord = f.moistureLabel === 'standing water' ? 'flooded' : f.moistureLabel
     const bare = watch && f.protect < 0.35 && f.status === 'growing'
-    const cell = (label: string, value: string, m: HTMLElement, cls = '') => h('div', { class: `gauge${cls ? ` ${cls}` : ''}` }, h('span', { class: 't-label' }, term(label, label === 'Hill' ? 'hilled' : label.toLowerCase())), h('b', null, value), m)
+    // What the soil's state means for the crop, under the pointer (a first-time player watched fields "flooded" for
+    // two weeks with nothing to say whether that hurt).
+    const WATER_SAYS: Partial<Record<S.Moisture, string>> = {
+      'standing water': 'Standing water after heavy rain. The crop grows slower until it drains, usually within a few days, and machines stay off the field.',
+      wet: 'Too wet for machines today. It dries in a day or two without rain.',
+      drying: 'Starting to dry. No harm yet.',
+      dry: 'Dry soil slows growth, and while the potatoes are forming it sets scab. Rain or a watering fixes it.',
+      wilting: 'The crop is wilting and loses yield every day until it rains or you water it.',
+    }
+    const cell = (label: string, value: string, m: HTMLElement, cls = '', says?: string) => h('div', { class: `gauge${cls ? ` ${cls}` : ''}`, title: says && !ctx.touch() ? says : undefined }, h('span', { class: 't-label' }, term(label, label === 'Hill' ? 'hilled' : label.toLowerCase())), h('b', null, value), m)
     return h('div', { class: 'gauges' },
       cell('Leaf', F.pct(f.canopy), meter(f.canopy, { label: 'Leaf cover' })),
-      cell('Water', waterWord, meter(Math.min(1, f.moisture), { label: 'Soil water', text: `${f.moistureLabel}, ${F.pct(f.moisture)} of what plants can use`, kind: waterKind }), waterKind === 'wet' ? '' : waterKind ?? ''),
+      cell('Water', waterWord, meter(Math.min(1, f.moisture), { label: 'Soil water', text: `${f.moistureLabel}, ${F.pct(f.moisture)} of what plants can use`, kind: waterKind }), waterKind === 'wet' ? '' : waterKind ?? '', WATER_SAYS[f.moistureLabel]),
       cell('Protection', f.protect > 0.02 ? F.pct(f.protect) : 'none', meter(f.protect, { label: 'Spray protection on the leaves', kind: bare ? (f.protect < 0.05 ? 'bad' : 'warn') : undefined }), bare ? (f.protect < 0.05 ? 'bad' : 'warn') : ''),
       cell('Hill', f.hillPasses >= 2 ? 'twice' : f.hillPasses === 1 ? 'once' : 'not yet', meter(f.hillPasses / 2, { label: 'Hilled', text: hillWord(f.hillPasses), half: true })))
   }

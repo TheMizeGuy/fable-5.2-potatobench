@@ -125,6 +125,7 @@ export const createFieldView: CreateFieldView = (canvas, app) => {
     yardAnchor: y => inner.yardAnchor(y),
     groundAt: (x, y) => inner.groundAt?.(x, y) ?? null,
     screenOf: p => inner.screenOf?.(p) ?? { x: 0, y: 0, visible: false },
+    zoom: () => inner.zoom?.() ?? NaN,
     show: what => inner.show?.(what),
     whenShown: (kind, field) => inner.whenShown(kind, field),
     dispose: () => inner.dispose(),
@@ -1810,6 +1811,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     yardAnchor,
     groundAt,
     screenOf,
+    zoom: () => rig.where().dist,
     show,
     whenShown,
     dispose() {
