@@ -99,7 +99,8 @@
 .hud.voice .season-screen .paused, .hud.voice .season-screen .running { visibility: hidden; }
 /* Off the season screen (the spring's walk through the plan sheet) the goal slip still stands down whole while the
    agent has a note: there both would be naming the next thing to press. */
-.hud.agent:not(:has(.season-screen)) .topbar :is(.goal, .goal-go) { visibility: hidden; }
+/* (a season screen on its way out does not count: it is still in the page for the moments it takes to leave) */
+.hud.agent:not(:has(.season-screen:not(.leaving))) .topbar :is(.goal, .goal-go) { visibility: hidden; }
 /* The first telegram carries the agent's own line that the game is paused: the board's tag would say it twice. */
 .hud:has(.telegram .guide-line) .topbar .stopped-tag { display: none; }
 
