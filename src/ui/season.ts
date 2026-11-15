@@ -429,7 +429,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
 
   // Woods and brush to clear come forward once the farm has a year behind it, or as soon as the player starts on them.
   function tractsShown(c: S.Campaign): boolean {
-    return c.history.length > 0 || S.TRACTS.some(t => c.fields[t].cover !== S.PARCELS[t].cover || c.fields[t].felled > 0 || !!c.fields[t].works)
+    return c.history.length > 0 || S.TRACTS.some(t => c.fields[t].cover !== S.PARCELS[t].cover || c.fields[t].felled > 0 || !!c.fields[t].works || (S.PARCELS[t].holding !== 'owned' && c.fields[t].tenure !== 'none'))
   }
 
   // The yard's own tag comes onto the land when something is built or going up there, or the goals reach a building.

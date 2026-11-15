@@ -68,6 +68,21 @@ export function spendBlock(c: Campaign, cost: number, what: string): string {
   return `You can't afford it yet. It costs $${withCommas(cost)}, and the bank lends until you owe $${withCommas(P.BUILD_CREDIT)} (you ${c.cash < 0 ? `owe $${withCommas(Math.round(-c.cash))}` : `have $${withCommas(Math.floor(c.cash))}`}).`
 }
 
+// Why this land cannot be bought now, or '' when it can. A field is bought in spring, with the year's plan; woods
+// and brush to clear can be bought in any part of the year (a first year, which opens on its season, has a way to
+// more land), a quarter down from what the farm can spend and the rest on the land mortgage.
+export function buyLandBlock(c: Campaign, field: number, dufourHeld: boolean): string {
+  const fp = c.fields[field], p = PARCELS[field]
+  if (!fp || !p) return 'No such field.'
+  if (fp.tenure === 'owned') return `You already own ${p.name}.`
+  const tract = fp.cover === 'woods' || fp.cover === 'brush'
+  if (c.phase !== 'plan' && !(tract && (c.phase === 'season' || c.phase === 'cellar'))) return tract ? 'You can buy land to clear in spring, during the season, or in winter.' : 'You can only buy a field in spring. Woods and brush to clear can be bought at any time.'
+  if (p.holding === 'dufour' && !dufourHeld) return `${p.name} comes with the Dufour place, so rent or buy a Dufour field first.`
+  const down = Math.round(p.price * P.MORTGAGE_DOWN)
+  if (down > spendable(c) + 1e-6) return `You can't afford the down payment yet. It's $${withCommas(down)}, a quarter of the price.`
+  return ''
+}
+
 // Why this building cannot be started at this yard now, or '' when it can.
 export function buildBlock(c: Campaign, kind: BuildingKind, yard: number, dufourHeld: boolean): string {
   const spec = P.BUILDINGS[kind]

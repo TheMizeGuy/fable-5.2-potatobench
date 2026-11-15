@@ -150,9 +150,10 @@ function toTheWord(world: World, c: Campaign): GameEvent | null {
 
 // Whether a farm of this seed opens on a day worth opening on: fair, a working day, and the day after it no worse
 // than cloud, so the first planting ordered is seen through.
-function fairOpening(record: World, seed: number): boolean {
-  const world = climateWorld(record, seed)
-  const c = createCampaign(world, { seed, startYear: FARM_YEAR0 + 1 })
+// (Judged on a copy of the very farm that would be played, its hired hands with it: who is on a farm can move the
+// day its crew asks.)
+function fairOpening(world: World, farm: Campaign): boolean {
+  const c = structuredClone(farm)
   if (!apply(world, c, { t: 'begin' }).ok || !toTheWord(world, c) || !c.season) return false
   const { year, day } = c.season
   const fair = (k: number) => { const d = getDay(world, year, day + k), sky = skyOf(d); return (sky === 'clear' || sky === 'cloud') && d.prcp < 1 }
@@ -255,13 +256,20 @@ export class App {
   newGame(startYear?: number, seed?: number): void {
     let s = seed ?? (crypto.getRandomValues(new Uint32Array(1))[0] | 0)
     if (startYear === undefined) {
-      if (seed === undefined && QUIET_S) for (let k = 0; k < OPENING_TRIES && !fairOpening(this.record, s); k++) s = crypto.getRandomValues(new Uint32Array(1))[0] | 0
-      this.world = climateWorld(this.record, s)
-      this.campaign = createCampaign(this.world, { seed: s, startYear: FARM_YEAR0 + 1 })
       // A new farm is three people, not one (the owner, 14 November: "watching all your guys"): the farmer and two
       // field hands, with their first season's wages already in the farm's hand. They can be let go in spring like
       // anyone hired then. (Not on the test clock: those farms start as they always did.)
-      if (QUIET_S) for (let k = 0; k < START_HANDS; k++) if (apply(this.world, this.campaign, { t: 'hire', kind: 'hand' }).ok) this.campaign.cash += START_HAND_PAY
+      const make = (k: number): { world: World; farm: Campaign } => {
+        const world = climateWorld(this.record, k)
+        const farm = createCampaign(world, { seed: k, startYear: FARM_YEAR0 + 1 })
+        if (QUIET_S) for (let n = 0; n < START_HANDS; n++) if (apply(world, farm, { t: 'hire', kind: 'hand' }).ok) farm.cash += START_HAND_PAY
+        return { world, farm }
+      }
+      let made = make(s)
+      // (a seed of Play's own choosing is one whose first morning is fair: the last tried is taken as it comes)
+      if (seed === undefined && QUIET_S) for (let k = 1; k < OPENING_TRIES && !fairOpening(made.world, made.farm); k++) { s = crypto.getRandomValues(new Uint32Array(1))[0] | 0; made = make(s) }
+      this.world = made.world
+      this.campaign = made.farm
     } else {
       this.world = this.record
       this.campaign = createCampaign(this.world, { seed: s, startYear })

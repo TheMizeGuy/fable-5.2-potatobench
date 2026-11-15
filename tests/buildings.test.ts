@@ -119,6 +119,35 @@ describe('building', () => {
     expect(S.spendable(c)).toBe(500)
   })
 
+  // A first year opens on its season: woods and brush to clear can be bought then too, so there is a way to more
+  // land before the second spring. A field is still bought in spring, with the year's plan.
+  it('a woodlot for sale can be bought during the season, a quarter down on the bank\'s money; a field cannot', () => {
+    const c = S.createCampaign(world, { seed: 1, startYear: 1990 })
+    ok(c, { t: 'begin' })
+    const lot = S.TRACTS.find(i => S.PARCELS[i].holding === 'sale')!
+    const price = S.PARCELS[lot].price, down = Math.round(price * S.MORTGAGE_DOWN)
+    expect(S.landInfo(c).find(l => l.field === lot)!.buyWhy).toBe('')
+    const owed = -c.cash
+    ok(c, { t: 'buyLand', field: lot })
+    expect(c.fields[lot].tenure).toBe('owned')
+    expect(c.cash).toBeCloseTo(-owed - down)
+    expect(c.mortgages.find(m => m.field === lot)!.owed).toBe(price - down)
+    // It is the farm's to fell from that day.
+    expect(S.jobBlock(c, 'fell', lot)).toBe('')
+    ok(c, { t: 'job', kind: 'fell', field: lot })
+    days(c, 3)
+    expect(c.fields[lot].felled).toBeGreaterThan(0)
+    refused(c, { t: 'buyLand', field: lot }, /already own/)
+    // A field ready to plant is not sold in the season.
+    const field = S.PARCELS.findIndex((p, i) => p.holding === 'field' && c.fields[i].tenure === 'none')
+    refused(c, { t: 'buyLand', field }, /only buy a field in spring/)
+    // Past what the bank lends, the down payment is refused.
+    const d = S.createCampaign(world, { seed: 1, startYear: 1990 })
+    ok(d, { t: 'begin' })
+    d.cash = -S.BUILD_CREDIT + 100
+    refused(d, { t: 'buyLand', field: lot }, /can't afford the down payment/)
+  })
+
   it('goes on through the winter with someone kept on to build', () => {
     const c = spring()
     ok(c, { t: 'hire', kind: 'hand' })

@@ -39,6 +39,13 @@ test('the build menu is one press from the season and a purchase is one more, on
   // What cannot be had says why, in a few words, where its key would be.
   await expect(page.getByTestId('buy-tractor2')).toContainText('Needs the machine shed')
   await expect(page.getByTestId('more-land')).toContainText('each spring')
+  // Woods for sale are bought here too, in the season: a quarter down, and the land is the farm's to clear.
+  const lot = await game<number>(page, `sim.TRACTS.find(i => sim.PARCELS[i].holding === 'sale')`)
+  await expect(page.getByTestId(`land-${lot}`)).toContainText(/\$[\d,]+ down/)
+  await page.getByTestId(`land-${lot}-go`).click()
+  expect(await game<string>(page, `c.fields[${lot}].tenure`)).toBe('owned')
+  await expect(page.getByTestId('build-said')).toContainText('is yours')
+  await expect(page.getByTestId(`fell-${lot}`)).toContainText('Fell it')
   expect(errors, errors.join('\n')).toEqual([])
 })
 

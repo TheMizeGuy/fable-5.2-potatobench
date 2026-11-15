@@ -137,7 +137,8 @@ describe('the clock', () => {
   it('a farm started from Play has a fair working day for its first morning, and the day after it', () => {
     setDays('long')
     try {
-      for (let k = 0; k < 4; k++) {
+      // (twelve farms: one in a few thousand finds no fair morning in the seeds it tries, and takes the last as it comes)
+      for (let k = 0; k < 12; k++) {
         const app = new App(loadWorld())
         app.newGame()
         const c = c0(app)

@@ -820,8 +820,8 @@ test('the guided year asks for the word to plant, and the press starts planting 
   const field = await toTheWord(page)
   const name = await page.evaluate(i => (globalThis as unknown as Win).__county.sim.FIELD_NAMES[i], field)
   void name
-  await expect(note(page, 'word')).toContainText('The soil is ready. Click Plant on a field.')
-  await expect(note(page, 'word')).toContainText('Your crew plants the other fields too.')
+  await expect(note(page, 'word')).toContainText('The soil is ready. Click the orange Plant key.')
+  await expect(note(page, 'word')).toContainText('One press plants every potato field.')
   // The game stopped itself for this decision, and its own line says why: the tip stands beside it.
   expect(await game<[number, string]>(page, '[app.speed, app.pauseCause]')).toEqual([0, 'plantAsk'])
   await expect(page.getByTestId('paused')).toBeVisible()

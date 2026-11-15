@@ -451,7 +451,8 @@ describe('invalid commands', () => {
       if (u.kind !== 'farmer') out.push({ t: 'raise', unit: u.id, wage: u.wage }, { t: 'raise', unit: u.id, wage: 20 }, { t: 'raise', unit: u.id, wage: NaN }, { t: 'foreman', unit: u.id, block: 'moon' as S.BlockId })
       if (u.kind !== 'farmer' && !u.foreman) out.push({ t: 'foreman', unit: u.id, block: null })
     }
-    if (c.fields[17].tenure !== 'owned' && (!S.holdsDufour(c) || c.phase !== 'plan')) out.push({ t: 'buyLand', field: 17 })
+    // (woods to clear can be bought in any part of the year since 15 November; the Dufour lot still needs Dufour land)
+    if (c.fields[17].tenure !== 'owned' && (!S.holdsDufour(c) || (c.phase !== 'plan' && c.phase !== 'season' && c.phase !== 'cellar'))) out.push({ t: 'buyLand', field: 17 })
     if (!S.hasBuilt(c, 'shed') && !c.upgrades.tractor2) out.push({ t: 'buy', upgrade: 'tractor2' })
     if (!c.upgrades.tractor2 && !c.upgrades.tractor3) out.push({ t: 'buy', upgrade: 'tractor3' })
     if (!S.holdsDufour(c)) out.push({ t: 'build', kind: 'house', yard: -2 })

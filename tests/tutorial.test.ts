@@ -340,8 +340,8 @@ describe('round seven: what the player is for, and what the agent asks', () => {
     const word = g.current(l)!
     expect(word.id).toBe('word')
     const field = S.fieldNeeds(w, c).findIndex(n => n.need?.act === 'plant')
-    expect(word.ask(l)).toBe('The soil is ready. Click Plant on a field.')
-    expect(word.why(l)).toBe('Your crew plants the other fields too.')
+    expect(word.ask(l)).toBe('The soil is ready. Click the orange Plant key.')
+    expect(word.why(l)).toBe('One press plants every potato field.')
     expect(word.point!(l)).toEqual({ badge: field })
     // It brings the stamps onto the guided screen, and it asks: the game stays paused after Got it.
     expect(g.hidden(c, 'season')).not.toContain('stamps')

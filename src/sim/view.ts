@@ -17,7 +17,7 @@ import {
   FIELD_NAMES, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills, placeName, standOpen, tractorsOwned, tractorsRunning,
   standingBy, waitFor, workday,
 } from './season.ts'
-import { buildBlock, buildCost, buildingAt, hasBuilt, rain30, roadFactor, wholeLoads, YARD_NAME } from './buildings.ts'
+import { buildBlock, buildCost, buildingAt, buyLandBlock, hasBuilt, rain30, roadFactor, wholeLoads, YARD_NAME } from './buildings.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_VIRUS, H_WILT,
   type BuildingKind, type Campaign, type Cover, type Day, type Due, type FieldSeason, type IncidentKind, type JobBy, type JobKind, type Skill, type Tenure, type Trait,
@@ -511,8 +511,7 @@ export function landInfo(c: Campaign): LandInfo[] {
     const down = Math.round(p.price * P.MORTGAGE_DOWN)
     const spring = c.phase === 'plan'
     const rentWhy = !spring ? 'You can only rent land in spring.' : p.holding !== 'field' ? `${p.name} isn't for rent. You can only buy it.` : fp.tenure === 'rented' ? 'You already rent it.' : ''
-    const buyWhy = !spring ? 'You can only buy land in spring.' : p.holding === 'dufour' && !holdsDufour(c) ? `${p.name} comes with the Dufour place, so rent or buy a Dufour field first.`
-      : c.cash < down ? `You can't afford the down payment yet. It's $${withCommas(down)}, a quarter of the price.` : ''
+    const buyWhy = buyLandBlock(c, i, holdsDufour(c))
     out.push({
       field: i, name: p.name, block: p.block, elev: fp.elev, position: POSITION[fp.elev], tenure: fp.tenure,
       rent: p.rent, price: p.price, soil: fp.soil, vert: fp.vert, streak: fp.streak, house, brings,

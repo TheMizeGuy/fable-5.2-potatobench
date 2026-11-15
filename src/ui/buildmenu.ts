@@ -18,7 +18,7 @@ interface Item { id: string; glyph: string; name: string; does: string; price: s
 
 const UPGRADE_GLYPH: Record<S.UpgradeId, string> = { boom: 'spray', harvester: 'dig', vent: 'store', reel: 'water', tractor2: 'machine', house2: 'store', tractor3: 'machine', truck: 'haul' }
 // What a machine's purchase waits on, said as the thing to do first.
-const first = (why: string): string => /machine shed/i.test(why) ? 'Needs the machine shed' : /second tractor first/i.test(why) ? 'Needs the second tractor' : /can't afford|costs \$|You need \$/i.test(why) ? 'Not enough money yet' : why.replace(/\.$/, '')
+const first = (why: string): string => /Dufour place/i.test(why) ? 'Needs a Dufour field first' : /machine shed/i.test(why) ? 'Needs the machine shed' : /second tractor first/i.test(why) ? 'Needs the second tractor' : /can't afford|costs \$|You need \$/i.test(why) ? 'Not enough money yet' : why.replace(/\.$/, '')
 
 function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => void): { title: string; note: string; list: Item[] }[] {
   const app = ctx.app
@@ -78,9 +78,19 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
     }
     return []
   })
-  land.push({ id: 'more-land', glyph: 'land', name: 'More fields', does: 'Fields to rent for a year, and land and woodlots to buy on a mortgage.', price: '', state: 'no', why: 'Rented and bought each spring, on the spring plan', label: '' })
+  // Woods and brush for sale: bought in any part of the year, a quarter down and the rest on the land mortgage.
+  for (const l of S.landInfo(c).filter(x => S.standing(x.cover) && x.price > 0)) {
+    const down = Math.round(l.price * S.MORTGAGE_DOWN)
+    land.push({
+      id: `land-${l.field}`, glyph: 'woods', name: `Buy ${l.name}`, does: F.localize(l.brings || 'Land to clear into a new field.'),
+      price: `${F.money(down)} down`, cost: down, sub: `${F.money(l.price)} in all: a quarter now, the rest on a land mortgage paid at each year end.`,
+      state: l.buyWhy ? 'no' : 'can', why: l.buyWhy ? first(l.buyWhy) : '', label: 'Buy',
+      run: () => { const r = ctx.run({ t: 'buyLand', field: l.field }); done(r.ok ? F.localize(r.events[0]?.text ?? 'Done.') : F.localize(r.err), r.ok); if (r.ok) app.focus(l.field) },
+    })
+  }
+  land.push({ id: 'more-land', glyph: 'land', name: 'More fields', does: 'Fields ready to plant, to rent for a year or to buy.', price: '', state: 'no', why: 'Rented and bought each spring, on the spring plan', label: '' })
   return [
-    { title: 'Buildings', note: 'Your crew builds them, between the crop\'s work. Logs come from felling and stone from picking rocks; what the yard lacks is bought.', list: buildings },
+    { title: 'Buildings', note: 'Your crew builds them, between the crop\'s work. Logs come from felling and stone from picking rocks; what the yard lacks is bought. (Potatoes are counted in cwt: a hundredweight, 100 lb.)', list: buildings },
     { title: 'Machines', note: 'Delivered the day you buy them.', list: machines },
     { title: 'People', note: '', list: crew },
     { title: 'Land', note: '', list: land },

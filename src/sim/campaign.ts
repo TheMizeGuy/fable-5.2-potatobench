@@ -14,7 +14,7 @@ import {
   haulByDark, haulRate, placeName, startSeason, stepDay, tractorsRunning, unitBlock, workDay, workday,
 } from './season.ts'
 import { CHOICE_LABEL } from './incidents.ts'
-import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, spendBlock, startBuilding, travel, YARD_NAME } from './buildings.ts'
+import { article, buildBlock, buildCost, buildingAt, buildWork, buyLandBlock, hasBuilt, spendBlock, startBuilding, travel, YARD_NAME } from './buildings.ts'
 import { brushedNow, COVER_WORD, fell, isField, standing } from './land.ts'
 import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Incident, JobKind, Lot, Result, RoutineKind, Season, SprayWay, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
@@ -772,15 +772,13 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       return ok([note(c, 'released', 'info', `${name} goes back to its owner.`, cmd.field)])
     }
     case 'buyLand': {
-      if (c.phase !== 'plan') return fail('You can only buy land in spring.')
       if (!fieldIndex(cmd.field)) return fail('No such field.')
+      const blocked = buyLandBlock(c, cmd.field, holdsDufour(c))
+      if (blocked) return fail(blocked)
       const fp = c.fields[cmd.field]
       const name = FIELD_NAMES[cmd.field]
-      if (fp.tenure === 'owned') return fail(`You already own ${name}.`)
-      if (PARCELS[cmd.field].holding === 'dufour' && !holdsDufour(c)) return fail(`${name} comes with the Dufour place, so rent or buy a Dufour field first.`)
       const price = PARCELS[cmd.field].price
       const down = Math.round(price * P.MORTGAGE_DOWN)
-      if (c.cash - down < 0) return fail(`You can't afford the down payment yet. It's $${withCommas(down)}, a quarter of the price.`)
       const was = fp.tenure
       cost(c, down)
       c.yearLand += down
