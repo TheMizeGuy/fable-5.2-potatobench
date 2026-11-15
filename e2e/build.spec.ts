@@ -127,9 +127,10 @@ test('the To do sheet says what is coming once', async ({ page, isMobile }) => {
   const errors = watchErrors(page)
   await startSeason(page)
   // Early August, the crop tended by the crew's own routine: the vine kill is the next thing, and the next goal.
-  await reach(page, `const { app } = q.g(); q.run(q.day(8, 6), ['kill', 'sell']); app.setSpeed(0); app.campaign.incidents = []; app.select(-1); app.selectUnit(-1)`)
+  // (spraying left to the crew, so no question about it stands over the screen)
+  await reach(page, `const { app } = q.g(); app.setSpeed(0); app.do({ t: 'sprayWay', way: 'auto' }); q.run(q.day(8, 6), ['kill', 'sell']); app.setSpeed(0); app.campaign.incidents = []; app.select(-1); app.selectUnit(-1)`)
   await putAway(page)
-  await expect(page.getByTestId('goal')).toContainText('kill the vines')
+  await expect(page.getByTestId('goal')).toContainText(/kill the vines/i)
   await page.getByTestId('bar-todo').click()
   const todo = page.getByTestId('todo')
   await expect(todo).toBeVisible()
