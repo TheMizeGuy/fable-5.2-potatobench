@@ -373,17 +373,16 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const r = document.querySelector(`#ui .plate-layer [data-testid="badge-${i}"]`)?.getBoundingClientRect()
       return a.visible && a.x >= 0 && a.y >= 0 && a.x <= innerWidth && a.y <= innerHeight && !!r && r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
     })
-    // (judged once the camera has come to rest: a season that opens on the question finds it still on its way in)
-    let was = ctx.view.fieldAnchor(0), tries = 0
-    const judge = (): void => {
-      if (app.screen !== 'season' || app.speed !== 0) return
+    // (a season that opens on the question finds the camera still on its way in: judged then once more, when it has
+    // come to rest, and never later than that, so nothing moves the land under a player who has gone on)
+    const asking = () => app.screen === 'season' && app.speed === 0 && (app.pauseCause === 'plantAsk' || app.pauseCause === 'killCall')
+    const was = ctx.view.fieldAnchor(0)
+    setTimeout(() => {
+      if (!asking()) return
       const now = ctx.view.fieldAnchor(0)
-      const still = Math.hypot(now.x - was.x, now.y - was.y) < 0.5
-      was = now
-      if (!still && ++tries < 24) { setTimeout(judge, 160); return }
+      if (Math.hypot(now.x - was.x, now.y - was.y) > 0.5) { setTimeout(() => { if (asking() && !onScreen()) app.focus(-1) }, 1300); return }
       if (!onScreen()) app.focus(-1)
-    }
-    setTimeout(judge, 400)
+    }, 400)
   }
   const off = app.on(ev => {
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
