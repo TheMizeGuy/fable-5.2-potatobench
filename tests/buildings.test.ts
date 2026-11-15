@@ -148,6 +148,33 @@ describe('building', () => {
     refused(d, { t: 'buyLand', field: lot }, /can't afford the down payment/)
   })
 
+  // What a building earns back is in the year-end figure where the game has a sum for it: the farm stand's takings
+  // over the market's price, to the season's close. (Asked for in every pass of docs/quality/five-second.md.)
+  it('the year-end forecast counts a farm stand\'s sales to the season\'s close, so building one raises it', () => {
+    const c = S.createCampaign(world, { seed: 1, startYear: 1990 })
+    ok(c, { t: 'begin' })
+    const was = S.moneyNow(world, c)
+    expect(was.stand).toBe(0)
+    expect(was.parts.some(p => p.id === 'stand')).toBe(false)
+    const cost = S.buildCost(c, 'stand').total
+    ok(c, { t: 'build', kind: 'stand', yard: HOME })
+    const now = S.moneyNow(world, c)
+    // Whole days of selling at the stand's rate, over the market's price.
+    const grown = c.plans.find(p => p?.crop === 'potato')!.variety
+    const aDay = S.STAND_CWT * S.basePrice(world, c, grown) * (S.STAND_PRICE - 1)
+    const days = now.stand / aDay
+    expect(days).toBeGreaterThan(5)
+    expect(days).toBeLessThan(60)
+    expect(Math.abs(days - Math.round(days))).toBeLessThan(1e-6)
+    expect(now.parts.find(p => p.id === 'stand')!.amount).toBeCloseTo(now.stand)
+    // The figure moves by the takings less the price, and the takings are the larger.
+    expect(now.after - was.after).toBeCloseTo(now.stand - cost, 0)
+    expect(now.after).toBeGreaterThan(was.after)
+    // Nothing is counted once the season is over.
+    tend(c, x => S.seasonDone(x))
+    expect(S.moneyNow(world, c).stand).toBe(0)
+  })
+
   it('goes on through the winter with someone kept on to build', () => {
     const c = spring()
     ok(c, { t: 'hire', kind: 'hand' })

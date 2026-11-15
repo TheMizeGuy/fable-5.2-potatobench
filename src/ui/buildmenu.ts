@@ -16,7 +16,8 @@ type State = 'can' | 'no' | 'have' | 'doing'
 // cost: what it takes from the year-end forecast, where that is a plain sum. tag: a word of advice beside its name.
 // gist: what it changes, in a few words, beside its name (two viewers of the menu: "give each building one short
 // effect line"); the sentence under it says the rest.
-interface Item { id: string; glyph: string; name: string; gist?: string; does: string; price: string; cost?: number; tag?: string; sub?: string; state: State; why: string; label: string; run?: () => void }
+// cmd: the purchase as a command, tried on a copy of the farm for the year-end figure it leaves.
+interface Item { id: string; glyph: string; name: string; gist?: string; does: string; price: string; cost?: number; cmd?: S.Cmd; tag?: string; sub?: string; state: State; why: string; label: string; run?: () => void }
 
 // The trade's words, said plainly where a newcomer meets them first (two viewers who knew nothing of potatoes: "cwt",
 // "intervale field", "No. 1", "B size").
@@ -67,7 +68,7 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
       sub: `${b.kind === 'stand' && standExtra > 0 ? `Pays for itself in about ${F.plural(Math.ceil(b.total / standExtra), 'day')} of selling` : BUILD_WHEN[b.kind]} · built in about ${F.plural(crewDays, 'day')}${mats && !bought ? ` with ${mats} from your yard` : ''}`,
       state: b.state === 'built' ? 'have' : b.state === 'building' ? 'doing' : b.ok ? 'can' : 'no',
       why: b.state === 'built' ? 'Built' : b.state === 'building' ? `Going up: ${F.pct(b.progress)} built` : b.ok ? '' : first(b.why),
-      label: 'Build', run: () => run({ t: 'build', kind: b.kind, yard: S.HOME_YARD }),
+      label: 'Build', cmd: { t: 'build', kind: b.kind, yard: S.HOME_YARD }, run: () => run({ t: 'build', kind: b.kind, yard: S.HOME_YARD }),
     }
   })
   const machines: Item[] = (Object.keys(S.UPGRADES) as S.UpgradeId[]).map(id => {
@@ -77,7 +78,7 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
     return {
       id: `buy-${id}`, glyph: UPGRADE_GLYPH[id], name: u.name, gist: UPGRADE_GIST[id], does: plain(u.blurb.replace(/ You need the machine shed[^.]*\./, '')), price: F.money(u.cost), cost: u.cost,
       state: have ? 'have' : why ? 'no' : 'can', why: have ? 'Owned' : why ? first(why) : '',
-      label: 'Buy', run: () => run({ t: 'buy', upgrade: id }),
+      label: 'Buy', cmd: { t: 'buy', upgrade: id }, run: () => run({ t: 'buy', upgrade: id }),
     }
   })
   const room = S.hireBlock(c, 'hand')
@@ -145,13 +146,19 @@ export function openBuild(ctx: Ctx): void {
         const c = app.campaign
         if (!c) return
         const money = c.phase === 'season' || c.phase === 'cellar' ? S.moneyNow(app.world, c) : null
+        // The year-end figure with the purchase made: the game's own forecast on a copy of the farm (so a farm
+        // stand's sales to the season's close are in it), or the figure less the price where it cannot be tried.
+        const leftAfter = (x: Item, after: number): number => {
+          if (x.cmd) { const copy = structuredClone(c); if (S.apply(app.world, copy, x.cmd).ok) return S.moneyNow(app.world, copy).after }
+          return after - (x.cost ?? 0)
+        }
         const row = (x: Item): HTMLElement => h('li', { class: `bm-row is-${x.state}${x.tag && x.state === 'can' ? ' is-pick' : ''}`, testid: x.id, title: x.gist && !ctx.touch() ? x.does : undefined },
           icon(x.glyph, 'i bm-ic'),
           h('div', { class: 'bm-what' }, h('b', { class: 'bm-name' }, x.name, x.gist ? h('span', { class: 'bm-gist' }, x.gist) : null, x.tag && x.state === 'can' ? h('span', { class: 'bm-tag' }, x.tag) : null), x.gist ? null : h('span', { class: 'bm-does' }, x.does), x.sub ? h('span', { class: 'bm-sub t-caption' }, x.sub) : null),
           h('div', { class: 'bm-get' },
             x.state === 'can' && x.run ? [h('button', { class: 'btn go bm-key', type: 'button', testid: `${x.id}-go`, onclick: x.run }, x.label, x.price && x.price !== 'No cost' ? h('span', { class: 'num bm-price' }, x.price) : null),
               // What the purchase leaves of the year-end forecast, so its price is read against the goal.
-              money && x.cost ? h('span', { class: `bm-left t-caption num${money.after - x.cost < 0 ? ' c-red' : ''}`, testid: `${x.id}-left` }, 'Year-end cash ', h('span', { class: 'bm-was' }, F.money(Math.round(money.after / 100) * 100)), ' \u2192 ', h('b', { class: money.after - x.cost < 0 ? 'c-red' : 'bm-ok' }, F.money(Math.round((money.after - x.cost) / 100) * 100))) : null]
+              money && x.cost ? ((left: number) => h('span', { class: `bm-left t-caption num${left < 0 ? ' c-red' : ''}`, testid: `${x.id}-left` }, 'Year-end cash ', h('span', { class: 'bm-was' }, F.money(Math.round(money.after / 100) * 100)), ' \u2192 ', h('b', { class: left < 0 ? 'c-red' : left > money.after ? 'bm-up' : 'bm-ok' }, F.money(Math.round(left / 100) * 100))))(leftAfter(x, money.after)) : null]
               : [x.price ? h('span', { class: 'num bm-price' }, x.price) : null, h('span', { class: `bm-why${x.state === 'have' ? ' ok' : ''}` }, x.state === 'have' ? [icon('check', 'i'), x.why] : x.why)]))
         const groups = items(ctx, c, (text, ok) => { said = { text, ok }; draw() })
         const head = h('div', { class: 'bm-head' },

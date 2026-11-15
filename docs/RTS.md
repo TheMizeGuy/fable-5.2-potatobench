@@ -141,6 +141,11 @@ from two viewers who knew nothing of the game (docs/quality/five-second.md):
   contractor until the farm owes $30,000 in all (`BUILD_CREDIT`), and machines are bought in any part of the year.
   Before, both came out of cash, and a first year is on the loan from its first day. `spendable`, `spendBlock` in
   `src/sim/buildings.ts`.
+- **What a purchase does to the year-end figure is the game's own forecast.** Each row of the build menu shows the
+  year-end cash now and with the purchase made, worked out on a copy of the farm. The forecast counts a farm
+  stand's sales to the season's close (`standAhead` in `src/sim/outlook.ts`), so a stand's row shows the figure
+  rising; the other buildings and the machines have no sum of their own in the forecast, and show their price
+  coming off it.
 - **A first year can buy land to clear.** Woods and brush for sale are bought in any part of the year from the build
   menu's Land part, a quarter down and the rest on the land mortgage; a field ready to plant is still bought or
   rented in spring, with the year's plan. `buyLandBlock` in `src/sim/buildings.ts`.

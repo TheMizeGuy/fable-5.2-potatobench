@@ -210,6 +210,7 @@ export interface MoneyNow {
   wages: number                    // wages still to pay before the year end: the season's, and anyone kept on over the winter
   sprays: number                   // the sprays still to come while the crew keeps the fields sprayed by itself (sprayOutlook)
   penalties: number                // what the open contracts look like costing in penalties (contractOutlook's middle)
+  stand: number                    // what the farm stand looks like taking, to the season's close, over the market's price
   interest: number                 // the bank's interest on what the year end would leave owed
   range: { lo: number; hi: number }   // after, give or take what the crop in the ground may come to
   callRisk: 'none' | 'possible' | 'likely'   // the bank's limit against that: under the middle, or under even the top
@@ -240,6 +241,40 @@ function wagesAhead(c: Campaign): number {
     for (const u of c.crew) if (u.kind !== 'farmer' && u.winter !== 'off') out += payOf(u) * Math.max(0, P.WINTER_MONTHS - c.month)
   }
   return out
+}
+
+// The farm stand's takings still to come this season over what the same potatoes fetch at the market's price
+// (season.ts, standSales: STAND_CWT a day at STAND_PRICE times the price): for a stand built or going up, from the day
+// it can open (August 1; its building done at the crew's pace; a field's crop weighed, which where none is yet is put
+// at the vine kill's day, the skins' fortnight and three days' digging on) to the day the season is reckoned to close,
+// the farm's Sundays off left out. A forecast, as the crop in the ground is.
+function standAhead(world: World, c: Campaign): number {
+  const s = c.season
+  if (c.phase !== 'season' || !s || s.frozen || seasonDone(c)) return 0
+  const b = c.buildings.find(x => x.kind === 'stand')
+  if (!b) return 0
+  const close = dayIndex(s.year, SEASON_CLOSE.month, SEASON_CLOSE.dom)
+  let open = Math.max(s.day, dayIndex(s.year, P.STAND_FROM.month, P.STAND_FROM.dom))
+  if (!b.built) open = Math.max(open, s.day + Math.ceil((b.need - b.done) / Math.max(1, c.crew.length)))
+  let grown: VarietyId | undefined
+  let first = Infinity
+  for (let i = 0; i < P.FIELD_COUNT; i++) {
+    const f = s.fields[i]
+    if (f.status === 'off' || f.status === 'rest' || f.status === 'lost') continue
+    if (f.status === 'idle' && c.plans[i]?.crop !== 'potato') continue
+    grown ??= f.variety
+    const lot = c.lots.find(l => l.open && l.year === s.year && l.field === i)
+    const day = f.weighed ? (lot ? s.day : Infinity)
+      : f.status === 'dug' || f.status === 'digging' ? s.day + 3
+        : f.status === 'dead' ? Math.max(s.day, f.deadDay + P.SKIN_DAYS) + 3
+          : (killOutlook(c, i)?.day ?? dayIndex(s.year, 8, 10)) + P.SKIN_DAYS + 3
+    if (day < first) first = day
+  }
+  if (!grown || !Number.isFinite(first)) return 0
+  open = Math.max(open, first)
+  let days = 0
+  for (let d = open; d <= close; d++) if (!(c.sundaysOff && weekday(s.year, d) === SUNDAY)) days++
+  return days * P.STAND_CWT * basePrice(world, c, grown) * (P.STAND_PRICE - 1)
 }
 
 // What a field's crop is worth now, sold and held: what its lots brought, what they would fetch today, what the digger
@@ -319,7 +354,8 @@ function moneyBook(world: World, c: Campaign): { now: MoneyNow; fields: Map<numb
   const due = { note: P.NOTE_PAYMENT, household: P.LIVING, mortgage, loan, total: bills + loan }
   // Debt left after the year end carries at CREDIT_RATE, charged then (campaign.ts, closeYear).
   const owedAt = (x: number) => x < 0 ? -x * P.CREDIT_RATE : 0
-  const before = cash + stored + growing + rest - wages - sprays - penalties - bills
+  const stand = standAhead(world, c)
+  const before = cash + stored + growing + rest + stand - wages - sprays - penalties - bills
   const interest = owedAt(before)
   const after = before - interest
   // The cash now, walked from the year's start: what was sold and what was spent, the spending by kind.
@@ -338,6 +374,7 @@ function moneyBook(world: World, c: Campaign): { now: MoneyNow; fields: Map<numb
     { id: 'stored', label: 'Stored crop', amount: stored },
     { id: 'growing', label: 'Crop in the ground', amount: growing },
     { id: 'rest', label: 'Oats and clover', amount: rest },
+    { id: 'stand', label: 'The farm stand, to the season\'s close', amount: stand },
     { id: 'wages', label: 'Wages to the year end', amount: -wages },
     { id: 'sprays', label: 'Sprays still to come', amount: -sprays },
     { id: 'penalties', label: 'Contract penalties', amount: -penalties },
@@ -347,7 +384,7 @@ function moneyBook(world: World, c: Campaign): { now: MoneyNow; fields: Map<numb
   ].filter(p => Math.abs(p.amount) >= 0.5)
   const range = { lo: before - lo - owedAt(before - lo), hi: before + hi - owedAt(before + hi) }
   const callRisk = range.hi < P.CREDIT_LIMIT ? 'likely' : after < P.CREDIT_LIMIT ? 'possible' : 'none'
-  return { now: { cash, loan, stored, growing, rest, wages, sprays, penalties, interest, range, callRisk, due, after, parts }, fields }
+  return { now: { cash, loan, stored, growing, rest, wages, sprays, penalties, stand, interest, range, callRisk, due, after, parts }, fields }
 }
 
 // ---------------------------------------------------------------- the spring plan's cash
@@ -470,6 +507,7 @@ export function moneyLook(world: World, c: Campaign): MoneyLook {
     mortgage: -(c.yearMortgage + now.due.mortgage),
     bills: -(P.NOTE_PAYMENT + P.LIVING),
     logs: c.yearLogs,
+    stand: now.stand,
     other: c.yearRevenue - lotRevenue - c.yearRest - c.yearLogs,
     interest: -now.interest,
   }
@@ -656,7 +694,7 @@ function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Recor
     orders: ['Field work', 'Field work'], sprays: ['Fewer sprays to pay for', 'Keeping the fields sprayed'], rest: ['Oats and clover', 'Oats and clover'],
     penalties: ['Contract nearer filled', 'Contract looks short'], storage: ['Storage', 'Storage'], rent: ['Rent', 'Rent'], land: ['Land', 'Land bought'],
     contractor: ['Contractors', 'Contractors'], building: ['Building', 'Building'], packing: ['Packing', 'Packing'], mortgage: ['Land mortgage', 'Land mortgage'],
-    bills: ['Year-end bills', 'Year-end bills'], logs: ['Logs sold', 'Logs'], other: ['Other sales', 'Other costs'],
+    bills: ['Year-end bills', 'Year-end bills'], logs: ['Logs sold', 'Logs'], stand: ['The farm stand\'s sales', 'Fewer days of the farm stand'], other: ['Other sales', 'Other costs'],
     interest: ['Less interest owed', 'Interest on what\'s owed'], start: ['Opening cash', 'Opening cash'],
   }
   return (WORDS[part] ?? [part, part])[up ? 0 : 1]

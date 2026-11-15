@@ -50,3 +50,5 @@
 .bm-left { font-style: normal; font-size: 14px; color: var(--ink-2); }
 .bm-left b { font: 700 16px/1.2 var(--f-text); color: var(--ink); }
 .bm-left b.c-red { color: var(--red); }
+
+.bm-left b.bm-up { color: var(--green, #2b5637); }
