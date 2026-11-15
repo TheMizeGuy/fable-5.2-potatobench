@@ -14,11 +14,22 @@ import './buildmenu.css'
 
 type State = 'can' | 'no' | 'have' | 'doing'
 // cost: what it takes from the year-end forecast, where that is a plain sum. tag: a word of advice beside its name.
-interface Item { id: string; glyph: string; name: string; does: string; price: string; cost?: number; tag?: string; sub?: string; state: State; why: string; label: string; run?: () => void }
+// gist: what it changes, in a few words, beside its name (two viewers of the menu: "give each building one short
+// effect line"); the sentence under it says the rest.
+interface Item { id: string; glyph: string; name: string; gist?: string; does: string; price: string; cost?: number; tag?: string; sub?: string; state: State; why: string; label: string; run?: () => void }
 
 // The trade's words, said plainly where a newcomer meets them first (two viewers who knew nothing of potatoes: "cwt",
 // "intervale field", "No. 1", "B size").
 const plain = (t: string): string => t.replace(/\bcwt\b/g, 'hundredweight').replace(/a home or intervale field/, 'a field near the pond').replace('Packed No. 1 sells for 15% more, and packed B size sells for three quarters of the No. 1 price.', 'Packed potatoes sell for 15% more, and the small ones sell too.')
+// (each from the catalogue's own figures: src/sim/params.ts, BUILDINGS and UPGRADES)
+const BUILD_GIST: Record<S.BuildingKind, string> = {
+  house: '+3,600 hundredweight of storage', shed: 'Machine work 15% faster', bunk: '+6 beds for hired people', packing: '+15% sale price in winter',
+  pond: 'Water for six waterings', stand: 'Sells at twice the price', station: 'Better forecasts', road: 'Travel and hauling 30% faster',
+}
+const UPGRADE_GIST: Record<S.UpgradeId, string> = {
+  boom: 'Spraying 2.5\u00d7 faster', harvester: 'Digging 1.6\u00d7 faster', vent: 'More storage, less rot', reel: 'Watering 2\u00d7 faster',
+  tractor2: 'Two machines at work at once', house2: 'Double the storage, built at once', tractor3: 'Three machines at work at once', truck: 'Hauling 2\u00d7 faster',
+}
 const UPGRADE_GLYPH: Record<S.UpgradeId, string> = { boom: 'spray', harvester: 'dig', vent: 'store', reel: 'water', tractor2: 'machine', house2: 'store', tractor3: 'machine', truck: 'haul' }
 // What a machine's purchase waits on, said as the thing to do first.
 const first = (why: string): string => /Dufour place/i.test(why) ? 'Needs a Dufour field first' : /machine shed/i.test(why) ? 'Needs the machine shed' : /second tractor first/i.test(why) ? 'Needs the second tractor' : /can't afford|costs \$|You need \$/i.test(why) ? 'Not enough money yet' : why.replace(/\.$/, '')
@@ -32,7 +43,7 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
     const bought = b.buyLogs > 0 || b.buyStone > 0
     const crewDays = Math.max(1, Math.ceil(b.days / Math.max(1, c.crew.length)))
     return {
-      id: `build-${b.kind}`, glyph: BUILD_GLYPH[b.kind], name: b.name, does: plain(b.does),
+      id: `build-${b.kind}`, glyph: BUILD_GLYPH[b.kind], name: b.name, gist: BUILD_GIST[b.kind], does: plain(b.does),
       price: F.money(b.total), cost: b.total,
       tag: b.kind === 'stand' && b.state === 'none' ? 'The cheapest building: a good first one' : undefined,
       sub: `Your crew builds it in about ${F.plural(crewDays, 'day')}${mats ? ` · ${mats}, ${bought ? 'bought in the price' : 'from your yard'}` : ''}`,
@@ -46,7 +57,7 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
     const have = !!c.upgrades[id]
     const why = have ? '' : equipNeeds(c, id)
     return {
-      id: `buy-${id}`, glyph: UPGRADE_GLYPH[id], name: u.name, does: plain(u.blurb.replace(/ You need the machine shed[^.]*\./, '')), price: F.money(u.cost), cost: u.cost,
+      id: `buy-${id}`, glyph: UPGRADE_GLYPH[id], name: u.name, gist: UPGRADE_GIST[id], does: plain(u.blurb.replace(/ You need the machine shed[^.]*\./, '')), price: F.money(u.cost), cost: u.cost,
       state: have ? 'have' : why ? 'no' : 'can', why: have ? 'Owned' : why ? first(why) : '',
       label: 'Buy', run: () => run({ t: 'buy', upgrade: id }),
     }
@@ -118,7 +129,7 @@ export function openBuild(ctx: Ctx): void {
         const money = c.phase === 'season' || c.phase === 'cellar' ? S.moneyNow(app.world, c) : null
         const row = (x: Item): HTMLElement => h('li', { class: `bm-row is-${x.state}${x.tag && x.state === 'can' ? ' is-pick' : ''}`, testid: x.id },
           icon(x.glyph, 'i bm-ic'),
-          h('div', { class: 'bm-what' }, h('b', { class: 'bm-name' }, x.name, x.tag && x.state === 'can' ? h('span', { class: 'bm-tag' }, x.tag) : null), h('span', { class: 'bm-does' }, x.does), x.sub ? h('span', { class: 'bm-sub t-caption' }, x.sub) : null),
+          h('div', { class: 'bm-what' }, h('b', { class: 'bm-name' }, x.name, x.gist ? h('span', { class: 'bm-gist' }, x.gist) : null, x.tag && x.state === 'can' ? h('span', { class: 'bm-tag' }, x.tag) : null), h('span', { class: 'bm-does' }, x.does), x.sub ? h('span', { class: 'bm-sub t-caption' }, x.sub) : null),
           h('div', { class: 'bm-get' },
             x.state === 'can' && x.run ? [h('button', { class: 'btn go bm-key', type: 'button', testid: `${x.id}-go`, onclick: x.run }, x.label, x.price && x.price !== 'No cost' ? h('span', { class: 'num bm-price' }, x.price) : null),
               // What the purchase leaves of the year-end forecast, so its price is read against the goal.
