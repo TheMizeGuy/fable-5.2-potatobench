@@ -34,7 +34,9 @@ const START_HAND_PAY = 2660
 // A new farm's first season opens on the morning its crew asks for the word to plant; a new farm's seed is one of
 // this many tried for a fair working day there (the first thing seen is the farm in good light, and the planting
 // starts when it is ordered).
-const OPENING_TRIES = 24
+// (About one seed in five has such a morning, so two dozen tries left one farm in two hundred without: a hundred and
+// twenty leave none in any number that will be played. A try is a few milliseconds.)
+const OPENING_TRIES = 120
 export type Days = keyof typeof LADDERS
 export const DAYS_PER_SECOND = [...LADDERS.long]
 export const SPEED_X = ['', '', '', '']
