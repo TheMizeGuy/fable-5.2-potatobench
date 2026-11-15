@@ -135,9 +135,7 @@
 .plate-layer .tag-wrap .tag-at:has(.tag:active) { filter: drop-shadow(0 1px 0 rgb(20 14 6 / .62)) drop-shadow(0 1px 1px rgb(20 14 6 / .34)) drop-shadow(0 3px 4px rgb(20 14 6 / .26)); }
 .yard-at .yard-tag { box-shadow: 0 0 0 1px #17120c, inset 0 1px 0 rgb(255 244 218 / .18), inset 0 -1px 0 rgb(0 0 0 / .25), 0 2px 2px rgb(0 0 0 / .32), 0 8px 12px -2px rgb(0 0 0 / .42); }
 /* Quiet when nothing is needed; a tag with a need, or in hand, stands up a size. */
-.tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag { height: 30px; padding: 0 10px 0 8px; }
-.tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag .nm { font-size: 16px; }
-.tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag::after { height: 30px; }
+/* (a quiet tag was a size smaller than one in hand until 14 November; every tag is the small size now) */
 .tag-wrap .tag-at.is-land .tag { color: var(--ink-2); background-color: var(--paper-2); opacity: .8; outline: 1px dashed var(--pencil); outline-offset: -3px; }
 .tag-wrap .tag-at.is-land .tag::before { box-shadow: inset 0 0 0 1px var(--edge), inset 0 0 0 3px var(--paper-2), inset 0 0 0 4px rgb(74 63 46 / 0.4); }
 @media (hover: hover) { .tag-wrap .tag:hover { background-color: var(--paper); } .tag-wrap .need:hover { box-shadow: 0 0 0 3px var(--paper), 0 0 0 5px var(--ink), inset 0 0 0 2px rgb(246 241 228 / 0.55); } }

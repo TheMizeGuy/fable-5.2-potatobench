@@ -276,7 +276,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       if (q.length !== 4 || !q.every(p => p.visible && Number.isFinite(p.x) && Number.isFinite(p.y))) return { x: NaN, y: NaN, visible: false }
       return { x: (q[0].x + q[1].x + q[2].x + q[3].x) / 4, y: (q[0].y + q[1].y + q[2].y + q[3].y) / 4, visible: true }
     }
-    const a = mid(0), b = mid(1), c = mid(4)
+    // (where tags hang at their fields' near edges, from those points, as it always was: the folds' measures are theirs)
+    const at = (i: number) => app.centerTags ? mid(i) : ctx.view.fieldAnchor(i)
+    const a = at(0), b = at(1), c = at(4)
     if (!finite(a) || !finite(b) || !finite(c)) return Infinity
     return Math.max(Math.hypot(a.x - b.x, a.y - b.y) / 16.2, Math.hypot(a.x - c.x, a.y - c.y) / 26.4)
   }

@@ -123,7 +123,9 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
         if (!el) { size = null; return fall.at() }
         const b = el.getBoundingClientRect()
         const k = (hold?.(el) ?? el).getBoundingClientRect()
-        if (!size || performance.now() - born < 300) size = { w: k.width, h: k.height }
+        // (the largest it is in those moments: a stamp beside a tag may be on its way out when the tag is pressed)
+        if (!size) size = { w: k.width, h: k.height }
+        else if (performance.now() - born < 300) size = { w: Math.max(size.w, k.width), h: Math.max(size.h, k.height) }
         const point = d ? { x: b.left + Math.max(0, Math.min(b.width, d.x)), y: b.top + Math.max(0, Math.min(b.height, d.y)) } : { x: b.left + Math.min(b.width, size.w) / 2, y: b.top + b.height / 2 }
         const on = fall.at()?.avoid
         return { point, keep: { left: k.left, top: k.top, right: k.left + size.w, bottom: k.top + size.h }, ...(away ? { spare: on } : { avoid: on }) }

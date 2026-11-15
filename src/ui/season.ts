@@ -433,9 +433,11 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     return c.history.length > 0 || S.TRACTS.some(t => c.fields[t].cover !== S.PARCELS[t].cover || c.fields[t].felled > 0 || !!c.fields[t].works)
   }
 
-  // The yard comes forward when the farm could pay for a building, or the goals reach one, or something is built.
+  // The yard's own tag comes onto the land when something is built or going up there, or the goals reach a building.
+  // (Until 14 November also whenever the farm could pay for one; the bank lends for a building from a first year's
+  // start now, the build menu on the bar is where one is ordered, and a tag with nothing behind it is one more label.)
   function yardShown(c: S.Campaign): boolean {
-    return c.buildings.length > 0 || app.yard !== 0 || nextGoal(c)?.id === 'build' || S.buildingInfo(c).some(b => b.ok)
+    return c.buildings.length > 0 || app.yard !== 0 || nextGoal(c)?.id === 'build'
   }
 
   let goalField = -1
@@ -793,7 +795,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (low === 'g' && !e.ctrlKey) { if (c.crew.length >= 3) grid.toggle(); else ctx.say('Who does what opens once you have three people on the farm.'); return true }
     if (low === 'y' && !e.ctrlKey) {
       if (yardShown(c)) app.selectYard(app.yard === S.HOME_YARD ? 0 : S.HOME_YARD)
-      else ctx.say('You can build once the farm can afford a building.')
+      else openBuild(ctx)
       return true
     }
     // B with no field in hand opens the build menu (with one, it is that field's Cut brush).

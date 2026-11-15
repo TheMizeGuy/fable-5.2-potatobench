@@ -78,7 +78,7 @@ test('fields are selected with a click, Shift, a double-click and the number key
   await page.getByTestId('field-2').click({ modifiers: ['Shift'] })
   await expect(page.locator(PRESSED)).toHaveCount(1)
   // A double-click takes every field in the same state: here, every potato field not yet planted.
-  // (the fields' own tags: the home yard has one too, from a first year's start, now that the bank lends for a building)
+  // (the fields' own tags: the home yard's is a plate too, once something is built there)
   const potato = await page.locator('#ui .plate[data-k^="field-"]').evaluateAll(els => els.filter(e => !/resting/.test(e.textContent ?? '')).length)
   expect(potato).toBeGreaterThan(1)
   await page.getByTestId('field-0').dblclick()
