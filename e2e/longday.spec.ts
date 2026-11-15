@@ -178,3 +178,17 @@ test('a new farm opens on the morning of the word to plant: the game stands at o
   expect(errors, errors.join('\n')).toEqual([])
 })
 
+
+// A farm saved on its first spring's plan (by a build that still showed that plan after Play) goes on as Play does now.
+test('Continue on a farm saved at its first spring\'s plan goes onto the land, stopped for the word to plant', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'run at the desk')
+  const errors = watchErrors(page)
+  await open(page)
+  await reach(page, `const { app } = q.g(); app.newGame(undefined, 11); app.save(); app.quitToTitle()`)
+  await page.getByTestId('continue').click()
+  await expect(page.getByTestId('forecast')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('begin-season')).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => (globalThis as unknown as { __county: { app: { pauseCause: string } } }).__county.app.pauseCause), { timeout: 10_000 }).toBe('plantAsk')
+  await expect(page.locator('#ui .plate-layer .need.worded.is-next')).toHaveText('Plant')
+  expect(errors, errors.join('\n')).toEqual([])
+})

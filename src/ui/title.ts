@@ -1,6 +1,8 @@
 // The opening (design/title.html): the farm almanac's cover over the land, a third of the frame, with the menu set
 // as its contents and the benchmark's credit printed as its imprint.
 import cut from '../../design/src/cut.svg?raw'
+import { QUIET_S } from '../game/app.ts'
+import { isFarmYear } from '../sim/index.ts'
 import { confirmPaper, patch, type Ctx, type Screen } from './core.ts'
 import { h } from './dom.ts'
 import { icon } from './icons.ts'
@@ -28,6 +30,13 @@ export async function startNewFarm(ctx: Ctx, guided = false): Promise<void> {
   // Onto the land at once; a browser that has not been asked about tips answers that first.
   if (guided) { guidedFarm(); straightIn(ctx) }
   else if (!startedFarm(app.campaign.seed)) straightIn(ctx)
+}
+
+// A farm saved on its first spring's plan by a build that still showed it (Play now goes onto the land) goes on as
+// Play does: the usual plan stands and the season starts.
+function resumeOnLand(ctx: Ctx): void {
+  const c = ctx.app.campaign
+  if (QUIET_S && c && c.phase === 'plan' && c.history.length === 0 && isFarmYear(c.startYear)) straightIn(ctx)
 }
 
 let entered = false
@@ -80,7 +89,7 @@ export function titleScreen(ctx: Ctx, o: { onMenu: () => void; onHelp: () => voi
       patch(menu, JSON.stringify([c?.year, c?.phase, c?.yearIdx, c?.outcome]), () => [
         h('p', { class: 't-label' }, 'Contents'),
         // The strong action is the one most players want: go on with the farm they have, or start one.
-        c ? h('button', { class: 'btn go wide', type: 'button', testid: 'continue', onclick: () => { if (!app.continueGame()) ctx.say('The saved farm couldn\'t be loaded. Start a new farm to play.', 'warn') } },
+        c ? h('button', { class: 'btn go wide', type: 'button', testid: 'continue', onclick: () => { if (!app.continueGame()) ctx.say('The saved farm couldn\'t be loaded. Start a new farm to play.', 'warn'); else resumeOnLand(ctx) } },
           h('span', null, 'Continue', h('span', { class: 'sub-go' }, `${seasonCount(c)}, ${PHASE_LABEL[c.phase].toLowerCase()}`)), icon('arrow', 'i'))
           : h('button', { class: 'btn go wide', type: 'button', testid: 'play', onclick: () => { void startNewFarm(ctx) } }, 'Play', icon('arrow', 'i')),
         c ? h('button', { class: 'cv-item lead', type: 'button', testid: 'play', onclick: () => { void startNewFarm(ctx) } },
